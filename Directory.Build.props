@@ -1,0 +1,17 @@
+﻿<Project>
+  <PropertyGroup>
+    <Authors>Andre</Authors>
+    <Company>Andre</Company>
+    <Product>Disk Space Inspector</Product>
+    <Copyright>Copyright (c) 2026 Andre. All rights reserved.</Copyright>
+    <PackageLicenseFile>LICENSE</PackageLicenseFile>
+    <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
+  </PropertyGroup>
+
+  <ItemGroup Condition="Exists('$(MSBuildThisFileDirectory)LICENSE')">
+    <None Include="$(MSBuildThisFileDirectory)LICENSE"
+          Pack="true"
+          PackagePath=""
+          Link="LICENSE" />
+  </ItemGroup>
+</Project>

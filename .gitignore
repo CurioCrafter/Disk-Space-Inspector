@@ -1,0 +1,39 @@
+# Build output
+bin/
+obj/
+TestResults/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Visual Studio
+.vs/
+
+# Rider / ReSharper
+.idea/
+_ReSharper*/
+*.DotSettings.user
+
+# OS/editor files
+.DS_Store
+Thumbs.db
+*.tmp
+*.temp
+*.log
+
+# Local app data and scan databases
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+*.bak
+
+# Published packages/installers
+artifacts/
+publish/
+*.nupkg
+*.snupkg
+*.msix
+*.msixbundle

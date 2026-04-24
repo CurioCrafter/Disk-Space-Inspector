@@ -1,0 +1,501 @@
+﻿<Window x:Class="DiskSpaceInspector.App.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:controls="clr-namespace:DiskSpaceInspector.App.Controls"
+        xmlns:vm="clr-namespace:DiskSpaceInspector.App.ViewModels"
+        mc:Ignorable="d"
+        Title="Disk Space Inspector" Height="920" Width="1540" MinHeight="760" MinWidth="1180"
+        Background="{StaticResource AppBg}" Foreground="{StaticResource TextPrimaryBrush}"
+        FontFamily="Segoe UI">
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="78"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="30"/>
+        </Grid.RowDefinitions>
+
+        <Border Grid.Row="0" Background="{StaticResource RailBg}" BorderBrush="{StaticResource LineBrush}" BorderThickness="0,0,0,1">
+            <Grid Margin="18,10">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="220"/>
+                    <ColumnDefinition Width="220"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="360"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0" Orientation="Vertical" VerticalAlignment="Center">
+                    <TextBlock Text="Disk Space Inspector" FontSize="22" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}"/>
+                    <TextBlock Text="Windows storage workbench" Foreground="{StaticResource MutedBrush}"/>
+                </StackPanel>
+                <ComboBox Grid.Column="1"
+                          ItemsSource="{Binding Volumes}"
+                          SelectedItem="{Binding SelectedVolume}"
+                          Height="34"
+                          VerticalAlignment="Center"
+                          Margin="0,0,14,0">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis"/>
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
+                <WrapPanel Grid.Column="2" VerticalAlignment="Center">
+                    <Button Content="Refresh" Command="{Binding RefreshDrivesCommand}"/>
+                    <Button Content="Load latest" Command="{Binding LoadLatestCommand}"/>
+                    <Button Content="Scan selected" Command="{Binding ScanSelectedCommand}" Background="{StaticResource AccentBrush}" BorderBrush="{StaticResource AccentBrush}"/>
+                    <Button Content="Scan all" Command="{Binding ScanAllCommand}"/>
+                    <Button Content="Pause" Command="{Binding PauseScanCommand}"/>
+                    <Button Content="Resume" Command="{Binding ResumeScanCommand}"/>
+                    <Button Content="Cancel" Command="{Binding CancelScanCommand}" Background="#3A2326" BorderBrush="{StaticResource DangerBrush}"/>
+                </WrapPanel>
+                <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBox Width="210" Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" ToolTip="Global search by name, path, or extension" Margin="0,0,12,0"/>
+                    <Border Width="132"
+                            Background="{StaticResource SurfaceLowBrush}"
+                            BorderBrush="{StaticResource LineBrush}"
+                            BorderThickness="1"
+                            CornerRadius="6"
+                            Padding="9,6">
+                        <TextBlock Text="{Binding AiStatusText}" Foreground="{StaticResource TextSecondaryBrush}" TextTrimming="CharacterEllipsis"/>
+                    </Border>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <TabControl Grid.Row="1" TabStripPlacement="Left" Background="{StaticResource AppBg}" BorderThickness="0">
+            <TabItem Header="Overview">
+                <Grid Background="{StaticResource AppBg}" Margin="16">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="118"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="1.15*"/>
+                        <ColumnDefinition Width="0.85*"/>
+                    </Grid.ColumnDefinitions>
+
+                    <Border Grid.Row="0" Grid.ColumnSpan="2" Style="{StaticResource Panel}" Padding="16" Margin="0,0,0,12">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                                <RowDefinition Height="16"/>
+                            </Grid.RowDefinitions>
+                            <DockPanel LastChildFill="False">
+                                <TextBlock DockPanel.Dock="Left" Text="{Binding StatusText}" Style="{StaticResource SectionTitle}" Margin="0,0,16,0"/>
+                                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                                    <TextBlock Text="{Binding AccountedBytesText, StringFormat=Seen {0}}" Foreground="{StaticResource MutedBrush}" Margin="0,0,18,0"/>
+                                    <TextBlock Text="{Binding UsedBytesText, StringFormat=Used {0}}" Foreground="{StaticResource MutedBrush}" Margin="0,0,18,0"/>
+                                    <TextBlock Text="{Binding ScanThroughputText}" Foreground="{StaticResource MutedBrush}"/>
+                                </StackPanel>
+                            </DockPanel>
+                            <ProgressBar Grid.Row="1" Height="11" Maximum="1" Value="{Binding ScanProgressValue, Mode=OneWay}" VerticalAlignment="Center"/>
+                            <Grid Grid.Row="2">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition/>
+                                    <ColumnDefinition/>
+                                    <ColumnDefinition/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="{Binding ScanProgressText}" Foreground="{StaticResource TextSecondaryBrush}"/>
+                                <TextBlock Grid.Column="1" Text="{Binding ScanEtaText}" Foreground="{StaticResource MutedBrush}" HorizontalAlignment="Center"/>
+                                <TextBlock Grid.Column="2" Text="{Binding ScanGapText}" Foreground="{StaticResource WarningBrush}" HorizontalAlignment="Right"/>
+                            </Grid>
+                        </Grid>
+                    </Border>
+
+                    <Grid Grid.Row="1" Grid.Column="0">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="180"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+                        <Border Style="{StaticResource Panel}" Margin="0,0,12,12">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="*"/>
+                                </Grid.RowDefinitions>
+                                <TextBlock Text="Drives" Style="{StaticResource SectionTitle}" Margin="0,0,0,10"/>
+                                <ListBox Grid.Row="1"
+                                         ItemsSource="{Binding Volumes}"
+                                         SelectedItem="{Binding SelectedVolume}"
+                                         Background="Transparent"
+                                         BorderThickness="0"
+                                         Foreground="{StaticResource TextPrimaryBrush}"
+                                         ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                                    <ListBox.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <WrapPanel/>
+                                        </ItemsPanelTemplate>
+                                    </ListBox.ItemsPanel>
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border Width="270" Margin="0,0,10,10" Background="{StaticResource SurfaceLowBrush}" BorderBrush="{StaticResource LineBrush}" BorderThickness="1" CornerRadius="6" Padding="10">
+                                                <Grid>
+                                                    <Grid.RowDefinitions>
+                                                        <RowDefinition Height="Auto"/>
+                                                        <RowDefinition Height="10"/>
+                                                        <RowDefinition Height="Auto"/>
+                                                    </Grid.RowDefinitions>
+                                                    <DockPanel>
+                                                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                                                        <TextBlock Text="{Binding Status}" DockPanel.Dock="Right" Foreground="{StaticResource MutedBrush}"/>
+                                                    </DockPanel>
+                                                    <ProgressBar Grid.Row="1" Height="7" Maximum="1" Value="{Binding UsedPercent, Mode=OneWay}" Margin="0,8,0,0"/>
+                                                    <Grid Grid.Row="2" Margin="0,8,0,0">
+                                                        <TextBlock Text="{Binding Used, StringFormat=Used {0}}" Foreground="{StaticResource MutedBrush}"/>
+                                                        <TextBlock Text="{Binding Free, StringFormat=Free {0}}" Foreground="{StaticResource MutedBrush}" HorizontalAlignment="Right"/>
+                                                    </Grid>
+                                                </Grid>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
+                            </Grid>
+                        </Border>
+
+                        <Border Grid.Row="1" Style="{StaticResource Panel}" Margin="0,0,12,0">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="*"/>
+                                </Grid.RowDefinitions>
+                                <TextBlock Text="Top space consumers" Style="{StaticResource SectionTitle}" Margin="0,0,0,10"/>
+                                <DataGrid Grid.Row="1" ItemsSource="{Binding TopSpaceConsumers}" AlternationCount="2">
+                                    <DataGrid.Columns>
+                                        <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="2*"/>
+                                        <DataGridTextColumn Header="Size" Binding="{Binding Size}" Width="110"/>
+                                        <DataGridTextColumn Header="%" Binding="{Binding Percent}" Width="80"/>
+                                        <DataGridTextColumn Header="Type" Binding="{Binding Category}" Width="120"/>
+                                        <DataGridTextColumn Header="Safety" Binding="{Binding Safety}" Width="120"/>
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                            </Grid>
+                        </Border>
+                    </Grid>
+
+                    <Grid Grid.Row="1" Grid.Column="1">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+                        <Border Style="{StaticResource Panel}" Margin="0,0,0,12">
+                            <StackPanel>
+                                <TextBlock Text="Cleanup potential" Style="{StaticResource SectionTitle}" Margin="0,0,0,10"/>
+                                <ItemsControl ItemsSource="{Binding CleanupPotential}" ItemTemplate="{StaticResource BreakdownTemplate}"/>
+                                <Separator Margin="0,12"/>
+                                <TextBlock Text="{Binding WarningSummary}" Foreground="{StaticResource MutedBrush}" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </Border>
+                        <Border Grid.Row="1" Style="{StaticResource Panel}">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="*"/>
+                                </Grid.RowDefinitions>
+                                <TextBlock Text="Top folders found so far" Style="{StaticResource SectionTitle}" Margin="0,0,0,10"/>
+                                <controls:TreemapView Grid.Row="1" ItemsSource="{Binding TreemapTiles}" TileSelectedCommand="{Binding TreemapTileSelectedCommand}"/>
+                            </Grid>
+                        </Border>
+                    </Grid>
+                </Grid>
+            </TabItem>
+
+            <TabItem Header="Explore">
+                <Grid Background="{StaticResource AppBg}" Margin="16">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="44"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    <DockPanel>
+                        <TextBlock Text="{Binding Breadcrumb}" Style="{StaticResource SectionTitle}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                            <TextBlock Text="Min MB" Foreground="{StaticResource MutedBrush}" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                            <TextBox Width="74" Text="{Binding MinimumSizeMegabytes, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,10,0"/>
+                            <Button Content="Drill" Command="{Binding DrillIntoSelectionCommand}"/>
+                            <Button Content="Open" Command="{Binding OpenSelectedCommand}"/>
+                        </StackPanel>
+                    </DockPanel>
+                    <Grid Grid.Row="1">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="300"/>
+                            <ColumnDefinition Width="5"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="5"/>
+                            <ColumnDefinition Width="330"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" Style="{StaticResource Panel}" Padding="0">
+                            <TreeView ItemsSource="{Binding TreeNodes}"
+                                      SelectedItemChanged="TreeView_OnSelectedItemChanged"
+                                      Background="{StaticResource PanelBrush}"
+                                      Foreground="{StaticResource TextPrimaryBrush}"
+                                      BorderThickness="0"
+                                      Padding="10"/>
+                        </Border>
+                        <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Stretch"/>
+                        <Grid Grid.Column="2">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="*"/>
+                                <RowDefinition Height="5"/>
+                                <RowDefinition Height="300"/>
+                            </Grid.RowDefinitions>
+                            <DataGrid x:Name="NodeGrid"
+                                      ItemsSource="{Binding NodeRows}"
+                                      SelectedItem="{Binding SelectedRow, Mode=TwoWay}"
+                                      MouseDoubleClick="NodeGrid_OnMouseDoubleClick"
+                                      AlternationCount="2">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="2*"/>
+                                    <DataGridTextColumn Header="Size" Binding="{Binding Size}" Width="110"/>
+                                    <DataGridTextColumn Header="%" Binding="{Binding Percent}" Width="70"/>
+                                    <DataGridTextColumn Header="Items" Binding="{Binding Items}" Width="150"/>
+                                    <DataGridTextColumn Header="Type" Binding="{Binding Category}" Width="110"/>
+                                    <DataGridTextColumn Header="Modified" Binding="{Binding Modified}" Width="145"/>
+                                    <DataGridTextColumn Header="Safety" Binding="{Binding Safety}" Width="115"/>
+                                </DataGrid.Columns>
+                            </DataGrid>
+                            <GridSplitter Grid.Row="1" Height="5" HorizontalAlignment="Stretch"/>
+                            <Border Grid.Row="2" Style="{StaticResource Panel}" Padding="0">
+                                <controls:TreemapView ItemsSource="{Binding TreemapTiles}" TileSelectedCommand="{Binding TreemapTileSelectedCommand}"/>
+                            </Border>
+                        </Grid>
+                        <GridSplitter Grid.Column="3" Width="5" HorizontalAlignment="Stretch"/>
+                        <Border Grid.Column="4" Style="{StaticResource Panel}">
+                            <StackPanel>
+                                <TextBlock Text="Selection" Style="{StaticResource SectionTitle}"/>
+                                <TextBlock Text="{Binding SelectedName}" FontSize="20" FontWeight="SemiBold" Margin="0,14,0,4" TextWrapping="Wrap"/>
+                                <TextBlock Text="{Binding SelectedPath}" Foreground="{StaticResource MutedBrush}" TextWrapping="Wrap"/>
+                                <Separator Margin="0,14"/>
+                                <TextBlock Text="{Binding SelectedSize, StringFormat=Size: {0}}"/>
+                                <TextBlock Text="{Binding SelectedCounts, StringFormat=Items: {0}}" Margin="0,8,0,0"/>
+                                <Border Background="{StaticResource AccentSoftBrush}"
+                                        BorderBrush="{StaticResource AccentDarkBrush}"
+                                        BorderThickness="1"
+                                        CornerRadius="5"
+                                        Padding="9,7"
+                                        Margin="0,14,0,0">
+                                    <TextBlock Text="{Binding SelectedSafety}" Foreground="{StaticResource TextSecondaryBrush}" TextWrapping="Wrap"/>
+                                </Border>
+                                <Separator Margin="0,14"/>
+                                <TextBlock Text="Evidence" Style="{StaticResource SectionTitle}" Margin="0,0,0,8"/>
+                                <ItemsControl ItemsSource="{Binding EvidenceRelationships}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding Evidence}" Foreground="{StaticResource MutedBrush}" TextWrapping="Wrap" Margin="0,0,0,8"/>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </Border>
+                    </Grid>
+                </Grid>
+            </TabItem>
+
+            <TabItem Header="Visualize">
+                <Grid Background="{StaticResource AppBg}" Margin="16">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="220"/>
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="1.2*"/>
+                        <ColumnDefinition Width="0.8*"/>
+                    </Grid.ColumnDefinitions>
+                    <Border Style="{StaticResource Panel}" Padding="0" Margin="0,0,12,12">
+                        <Grid>
+                            <TextBlock Text="Squarified treemap" Style="{StaticResource SectionTitle}" Margin="14" Panel.ZIndex="1"/>
+                            <controls:TreemapView Margin="0,42,0,0" ItemsSource="{Binding TreemapTiles}" TileSelectedCommand="{Binding TreemapTileSelectedCommand}"/>
+                        </Grid>
+                    </Border>
+                    <Border Grid.Column="1" Style="{StaticResource Panel}" Margin="0,0,0,12">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+                            <TextBlock Text="Sunburst" Style="{StaticResource SectionTitle}" Margin="0,0,0,10"/>
+                            <controls:SunburstView Grid.Row="1" ItemsSource="{Binding SunburstSegments}" SegmentSelectedCommand="{Binding SunburstSegmentSelectedCommand}"/>
+                        </Grid>
+                    </Border>
+                    <Border Grid.Row="1" Style="{StaticResource Panel}" Margin="0,0,12,0">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+                            <TextBlock Text="File types" Style="{StaticResource SectionTitle}" Margin="0,0,0,10"/>
+                            <ItemsControl Grid.Row="1" ItemsSource="{Binding TypeBreakdown}" ItemTemplate="{StaticResource BreakdownTemplate}"/>
+                        </Grid>
+                    </Border>
+                    <Border Grid.Row="1" Grid.Column="1" Style="{StaticResource Panel}">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+                            <TextBlock Text="Age" Style="{StaticResource SectionTitle}" Margin="0,0,0,10"/>
+                            <ItemsControl Grid.Row="1" ItemsSource="{Binding AgeHistogram}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid Margin="0,5">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="130"/>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="92"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Text="{Binding Label}" Foreground="{StaticResource TextSecondaryBrush}"/>
+                                            <ProgressBar Grid.Column="1" Height="8" Maximum="1" Value="{Binding Fraction, Mode=OneWay}" Foreground="{StaticResource WarningBrush}" VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Column="2" Text="{Binding Size}" Foreground="{StaticResource MutedBrush}" HorizontalAlignment="Right"/>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </Grid>
+                    </Border>
+                </Grid>
+            </TabItem>
+
+            <TabItem Header="Cleanup">
+                <Grid Background="{StaticResource AppBg}" Margin="16">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="220"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    <Border Style="{StaticResource Panel}" Margin="0,0,0,12">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+                            <DockPanel LastChildFill="False" Margin="0,0,0,10">
+                                <TextBlock Text="Codex cleanup advisor" Style="{StaticResource SectionTitle}"/>
+                                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                                    <Button Content="Login with Codex" Command="{Binding LoginWithCodexCommand}"/>
+                                    <Button Content="Check Codex status" Command="{Binding CheckCodexStatusCommand}"/>
+                                    <Button Content="Ask Codex AI" Command="{Binding AskAiCleanupAdvisorCommand}" Background="{StaticResource AccentBrush}" BorderBrush="{StaticResource AccentBrush}"/>
+                                    <Button Content="Stage AI item" Command="{Binding StageAiRecommendationCommand}"/>
+                                </StackPanel>
+                            </DockPanel>
+                            <DataGrid Grid.Row="1"
+                                      ItemsSource="{Binding AiRecommendations}"
+                                      SelectedItem="{Binding SelectedAiRecommendation, Mode=TwoWay}"
+                                      AlternationCount="2">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="Item" Binding="{Binding DisplayName}" Width="180"/>
+                                    <DataGridTextColumn Header="Size" Binding="{Binding Size}" Width="95"/>
+                                    <DataGridTextColumn Header="AI says" Binding="{Binding Recommendation}" Width="140"/>
+                                    <DataGridTextColumn Header="Safety" Binding="{Binding Safety}" Width="110"/>
+                                    <DataGridTextColumn Header="Stage" Binding="{Binding CanStage}" Width="70"/>
+                                    <DataGridTextColumn Header="Why" Binding="{Binding Reasoning}" Width="2*"/>
+                                    <DataGridTextColumn Header="Guardrail" Binding="{Binding Guardrail}" Width="2*"/>
+                                    <DataGridTextColumn Header="Path" Binding="{Binding Path}" Width="2*"/>
+                                </DataGrid.Columns>
+                            </DataGrid>
+                        </Grid>
+                    </Border>
+                    <Border Grid.Row="1" Style="{StaticResource Panel}">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+                            <DockPanel LastChildFill="False" Margin="0,0,0,10">
+                                <TextBlock Text="Cleanup findings" Style="{StaticResource SectionTitle}"/>
+                                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                                    <TextBlock Text="{Binding PlannedCleanupSize, StringFormat=Staged: {0}}" Foreground="{StaticResource MutedBrush}" VerticalAlignment="Center" Margin="0,0,12,0"/>
+                                    <Button Content="Stage selected" Command="{Binding StageFindingCommand}" Background="{StaticResource AccentBrush}" BorderBrush="{StaticResource AccentBrush}"/>
+                                </StackPanel>
+                            </DockPanel>
+                            <DataGrid Grid.Row="1"
+                                      ItemsSource="{Binding CleanupFindings}"
+                                      SelectedItem="{Binding SelectedFinding, Mode=TwoWay}"
+                                      AlternationCount="2">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="Item" Binding="{Binding DisplayName}" Width="2*"/>
+                                    <DataGridTextColumn Header="Size" Binding="{Binding Size}" Width="110"/>
+                                    <DataGridTextColumn Header="Safety" Binding="{Binding Safety}" Width="155"/>
+                                    <DataGridTextColumn Header="Action" Binding="{Binding Action}" Width="150"/>
+                                    <DataGridTextColumn Header="Category" Binding="{Binding Category}" Width="160"/>
+                                    <DataGridTextColumn Header="Confidence" Binding="{Binding Confidence}" Width="100"/>
+                                    <DataGridTextColumn Header="Why" Binding="{Binding Explanation}" Width="4*"/>
+                                </DataGrid.Columns>
+                            </DataGrid>
+                        </Grid>
+                    </Border>
+                </Grid>
+            </TabItem>
+
+            <TabItem Header="Changes">
+                <Grid Background="{StaticResource AppBg}" Margin="16">
+                    <Border Style="{StaticResource Panel}">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+                            <TextBlock Text="What changed" Style="{StaticResource SectionTitle}" Margin="0,0,0,10"/>
+                            <DataGrid Grid.Row="1" ItemsSource="{Binding Changes}" AlternationCount="2">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="Kind" Binding="{Binding Kind}" Width="100"/>
+                                    <DataGridTextColumn Header="Direction" Binding="{Binding Direction}" Width="100"/>
+                                    <DataGridTextColumn Header="Delta" Binding="{Binding Delta}" Width="110"/>
+                                    <DataGridTextColumn Header="Current" Binding="{Binding CurrentSize}" Width="110"/>
+                                    <DataGridTextColumn Header="Previous" Binding="{Binding PreviousSize}" Width="110"/>
+                                    <DataGridTextColumn Header="Path" Binding="{Binding Path}" Width="3*"/>
+                                    <DataGridTextColumn Header="Previous path" Binding="{Binding PreviousPath}" Width="2*"/>
+                                    <DataGridTextColumn Header="Reason" Binding="{Binding Reason}" Width="2*"/>
+                                </DataGrid.Columns>
+                            </DataGrid>
+                        </Grid>
+                    </Border>
+                </Grid>
+            </TabItem>
+
+            <TabItem Header="Insights">
+                <Grid Background="{StaticResource AppBg}" Margin="16">
+                    <Border Style="{StaticResource Panel}">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+                            <TextBlock Text="Storage insights and relationships" Style="{StaticResource SectionTitle}" Margin="0,0,0,10"/>
+                            <DataGrid Grid.Row="1" ItemsSource="{Binding Insights}" AlternationCount="2">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="Tool" Binding="{Binding Tool}" Width="180"/>
+                                    <DataGridTextColumn Header="Finding" Binding="{Binding Title}" Width="220"/>
+                                    <DataGridTextColumn Header="Size" Binding="{Binding Size}" Width="110"/>
+                                    <DataGridTextColumn Header="Safety" Binding="{Binding Safety}" Width="120"/>
+                                    <DataGridTextColumn Header="Action" Binding="{Binding Action}" Width="140"/>
+                                    <DataGridTextColumn Header="Path" Binding="{Binding Path}" Width="2*"/>
+                                    <DataGridTextColumn Header="Why" Binding="{Binding Description}" Width="3*"/>
+                                    <DataGridTextColumn Header="Evidence" Binding="{Binding Evidence}" Width="2*"/>
+                                    <DataGridTextColumn Header="Confidence" Binding="{Binding Confidence}" Width="100"/>
+                                </DataGrid.Columns>
+                            </DataGrid>
+                        </Grid>
+                    </Border>
+                </Grid>
+            </TabItem>
+
+            <TabItem Header="Settings">
+                <Grid Background="{StaticResource AppBg}" Margin="16">
+                    <Border Style="{StaticResource Panel}" Width="620" HorizontalAlignment="Left" VerticalAlignment="Top">
+                        <StackPanel>
+                            <TextBlock Text="Settings" Style="{StaticResource SectionTitle}"/>
+                            <TextBlock Text="Fast-first scan is enabled for new scans. Relationship and ownership enrichment is deferred so the first scan becomes useful sooner." Foreground="{StaticResource MutedBrush}" TextWrapping="Wrap" Margin="0,12,0,0"/>
+                            <TextBlock Text="Codex AI uses Codex CLI ChatGPT login and never reads stored Codex credentials directly." Foreground="{StaticResource MutedBrush}" TextWrapping="Wrap" Margin="0,10,0,0"/>
+                            <Separator Margin="0,16"/>
+                            <TextBlock Text="{Binding ScanDetail}" Foreground="{StaticResource TextSecondaryBrush}" TextWrapping="Wrap"/>
+                        </StackPanel>
+                    </Border>
+                </Grid>
+            </TabItem>
+        </TabControl>
+
+        <Border Grid.Row="2" Background="{StaticResource RailBg}" BorderBrush="{StaticResource LineBrush}" BorderThickness="0,1,0,0">
+            <TextBlock Text="{Binding ScanDetail}" Foreground="{StaticResource MutedBrush}" VerticalAlignment="Center" Margin="18,0"/>
+        </Border>
+    </Grid>
+</Window>
