@@ -22,6 +22,7 @@ public sealed class MainViewModel : ObservableObject
     private readonly ITreemapLayoutService _treemapLayout;
     private readonly ISunburstLayoutService _sunburstLayout;
     private readonly IStorageBreakdownService _breakdownService;
+    private readonly IStorageAnalyticsService _analyticsService;
     private readonly IScanStore _scanStore;
     private readonly IAiCleanupAdvisor _aiAdvisor;
     private readonly ICodexAuthService _codexAuthService;
@@ -63,6 +64,7 @@ public sealed class MainViewModel : ObservableObject
     private CodexAuthStatus _codexAuthStatus = new();
     private string _aiStatusText = "Codex AI uses your Codex ChatGPT login. Click Check Codex status or Login with Codex.";
     private string _aiRecommendationSummary = "No AI recommendations yet.";
+    private string _visualLabSummary = "Run a scan or open demo mode to generate visual analytics.";
     private bool _isAiBusy;
     private AiCleanupRecommendationViewModel? _selectedAiRecommendation;
 
@@ -74,6 +76,7 @@ public sealed class MainViewModel : ObservableObject
             new SquarifiedTreemapLayoutService(),
             new SunburstLayoutService(),
             new StorageBreakdownService(),
+            new StorageAnalyticsService(),
             new SqliteScanStore(Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                 "Disk Space Inspector",
@@ -91,6 +94,7 @@ public sealed class MainViewModel : ObservableObject
         ITreemapLayoutService treemapLayout,
         ISunburstLayoutService sunburstLayout,
         IStorageBreakdownService breakdownService,
+        IStorageAnalyticsService analyticsService,
         IScanStore scanStore,
         IAiCleanupAdvisor? aiAdvisor = null,
         ICodexAuthService? codexAuthService = null,
@@ -102,6 +106,7 @@ public sealed class MainViewModel : ObservableObject
         _treemapLayout = treemapLayout;
         _sunburstLayout = sunburstLayout;
         _breakdownService = breakdownService;
+        _analyticsService = analyticsService;
         _scanStore = scanStore;
         _aiAdvisor = aiAdvisor ?? new CodexCliCleanupAdvisor();
         _codexAuthService = codexAuthService ?? new CodexAuthService();
@@ -140,6 +145,7 @@ public sealed class MainViewModel : ObservableObject
         CheckCodexStatusCommand = new AsyncRelayCommand(CheckCodexStatusAsync, () => !IsAiBusy);
         AskAiCleanupAdvisorCommand = new AsyncRelayCommand(AskAiCleanupAdvisorAsync, CanAskAiCleanupAdvisor);
         StageAiRecommendationCommand = new RelayCommand(_ => StageSelectedAiRecommendation(), _ => SelectedAiRecommendation is not null);
+        VisualChartSelectedCommand = new RelayCommand(HandleVisualChartSelection);
 
         if (demoMode)
         {
@@ -181,6 +187,12 @@ public sealed class MainViewModel : ObservableObject
 
     public ObservableCollection<AiCleanupRecommendationViewModel> AiRecommendations { get; } = [];
 
+    public ObservableCollection<ChartDefinitionViewModel> VisualLabCharts { get; } = [];
+
+    public ObservableCollection<ChartDefinitionViewModel> VisualLabAdvancedCharts { get; } = [];
+
+    public ObservableCollection<TutorialStepViewModel> TutorialSteps { get; } = [];
+
     public RelayCommand RefreshDrivesCommand { get; }
 
     public AsyncRelayCommand ScanSelectedCommand { get; }
@@ -212,6 +224,8 @@ public sealed class MainViewModel : ObservableObject
     public AsyncRelayCommand AskAiCleanupAdvisorCommand { get; }
 
     public RelayCommand StageAiRecommendationCommand { get; }
+
+    public RelayCommand VisualChartSelectedCommand { get; }
 
     public VolumeViewModel? SelectedVolume
     {
@@ -428,6 +442,12 @@ public sealed class MainViewModel : ObservableObject
     {
         get => _aiRecommendationSummary;
         private set => SetProperty(ref _aiRecommendationSummary, value);
+    }
+
+    public string VisualLabSummary
+    {
+        get => _visualLabSummary;
+        private set => SetProperty(ref _visualLabSummary, value);
     }
 
     public bool IsAiBusy
@@ -698,14 +718,19 @@ public sealed class MainViewModel : ObservableObject
         IEnumerable<ChangeRecord>? changes = null,
         IEnumerable<InsightFinding>? insights = null)
     {
+        var findingList = findings.ToList();
+        var relationshipList = relationships?.ToList() ?? [];
+        var changeList = changes?.ToList() ?? [];
+        var insightList = insights?.ToList() ?? [];
+
         _currentScan = result;
-        _currentRelationships = relationships?.ToList() ?? [];
+        _currentRelationships = relationshipList;
         _nodes = result.Nodes.ToDictionary(n => n.Id);
         _childrenByParent = result.Nodes
             .Where(n => n.ParentId is not null)
             .GroupBy(n => n.ParentId!.Value)
             .ToDictionary(g => g.Key, g => g.OrderByDescending(SizeOf).ThenBy(n => n.Name).ToList());
-        _findingsByNode = findings
+        _findingsByNode = findingList
             .GroupBy(f => f.NodeId)
             .ToDictionary(g => g.Key, g => g.OrderByDescending(f => f.Confidence).First());
 
@@ -716,13 +741,13 @@ public sealed class MainViewModel : ObservableObject
         }
 
         Changes.Clear();
-        foreach (var change in (changes ?? []).OrderByDescending(c => Math.Abs(c.DeltaBytes)).Take(2000))
+        foreach (var change in changeList.OrderByDescending(c => Math.Abs(c.DeltaBytes)).Take(2000))
         {
             Changes.Add(new ChangeRecordViewModel(change));
         }
 
         Insights.Clear();
-        foreach (var insight in (insights ?? []).OrderByDescending(i => i.SizeBytes).ThenByDescending(i => i.Confidence).Take(2000))
+        foreach (var insight in insightList.OrderByDescending(i => i.SizeBytes).ThenByDescending(i => i.Confidence).Take(2000))
         {
             Insights.Add(new InsightFindingViewModel(insight));
         }
@@ -739,6 +764,7 @@ public sealed class MainViewModel : ObservableObject
         }
 
         RefreshOverviewCollections();
+        RefreshVisualLab(result, findingList, relationshipList, changeList);
 
         TreeNodes.Clear();
         var root = result.Nodes.FirstOrDefault(n => n.ParentId is null) ?? result.Nodes.FirstOrDefault();
@@ -991,6 +1017,66 @@ public sealed class MainViewModel : ObservableObject
         foreach (var item in _breakdownService.BuildCleanupPotential(_findingsByNode.Values))
         {
             CleanupPotential.Add(new StorageBreakdownItemViewModel(item));
+        }
+    }
+
+    private void RefreshVisualLab(
+        ScanResult result,
+        IReadOnlyList<CleanupFinding> findings,
+        IReadOnlyList<StorageRelationship> relationships,
+        IReadOnlyList<ChangeRecord> changes)
+    {
+        VisualLabCharts.Clear();
+        VisualLabAdvancedCharts.Clear();
+        TutorialSteps.Clear();
+
+        var snapshot = _analyticsService.BuildSnapshot(
+            result,
+            findings,
+            relationships,
+            changes,
+            Volumes.Select(v => v.Model).ToList());
+
+        foreach (var chart in snapshot.Charts.Where(c => !c.IsAdvanced).Take(16))
+        {
+            VisualLabCharts.Add(new ChartDefinitionViewModel(chart));
+        }
+
+        foreach (var chart in snapshot.Charts.Where(c => c.IsAdvanced).Take(32))
+        {
+            VisualLabAdvancedCharts.Add(new ChartDefinitionViewModel(chart));
+        }
+
+        var number = 1;
+        foreach (var step in snapshot.Tutorials)
+        {
+            TutorialSteps.Add(new TutorialStepViewModel(step, number++));
+        }
+
+        VisualLabSummary = snapshot.Summary;
+    }
+
+    private void HandleVisualChartSelection(object? payload)
+    {
+        switch (payload)
+        {
+            case ChartPoint { NodeId: { } nodeId }:
+                NavigateToNode(nodeId);
+                StatusText = "Visual Lab selection synced to the inspector.";
+                break;
+            case RelationshipFlow { NodeId: { } nodeId }:
+                NavigateToNode(nodeId);
+                StatusText = "Relationship flow synced to the inspector.";
+                break;
+            case ChartPoint point when !string.IsNullOrWhiteSpace(point.Path):
+                StatusText = $"Visual Lab selected {point.Path}.";
+                break;
+            case HeatmapCell cell:
+                StatusText = $"Visual Lab selected {cell.Label}: {cell.Detail}.";
+                break;
+            case RelationshipFlow flow:
+                StatusText = $"Visual Lab selected {flow.Source} -> {flow.Target}.";
+                break;
         }
     }
 

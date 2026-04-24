@@ -171,6 +171,14 @@ internal static class DemoDataFactory
         Add(nodes, 111, 101, "client-export-2025.zip", @"C:\Users\demo\Downloads\client-export-2025.zip", FileSystemNodeKind.File, GiB(12.4), 1, 0, "Archive", now.AddDays(-94), 4, ".zip");
         Add(nodes, 112, 103, "screen-recording.mov", @"C:\Users\demo\Videos\screen-recording.mov", FileSystemNodeKind.File, GiB(18.8), 1, 0, "Video", now.AddDays(-76), 4, ".mov");
         Add(nodes, 113, 104, "raw-photo-session.zip", @"C:\Users\demo\Pictures\raw-photo-session.zip", FileSystemNodeKind.File, GiB(11.2), 1, 0, "Image", now.AddDays(-420), 4, ".zip");
+        Add(nodes, 114, 105, "pnpm store", @"C:\Users\demo\AppData\Local\pnpm-store", FileSystemNodeKind.Directory, GiB(6.2), 142_000, 17_400, "Code", now.AddDays(-11), 4);
+        Add(nodes, 115, 105, "pip cache", @"C:\Users\demo\AppData\Local\pip\Cache", FileSystemNodeKind.Directory, GiB(3.6), 54_000, 7_300, "Code", now.AddDays(-18), 4);
+        Add(nodes, 116, 100, ".cargo", @"C:\Users\demo\.cargo\registry", FileSystemNodeKind.Directory, GiB(5.4), 61_000, 8_600, "Code", now.AddDays(-28), 3);
+        Add(nodes, 117, 105, "Ubuntu WSL", @"C:\Users\demo\AppData\Local\Packages\CanonicalGroupLimited.Ubuntu\LocalState", FileSystemNodeKind.Directory, GiB(36), 12_400, 2_100, "Archive", now.AddHours(-12), 4);
+        Add(nodes, 118, 117, "ext4.vhdx", @"C:\Users\demo\AppData\Local\Packages\CanonicalGroupLimited.Ubuntu\LocalState\ext4.vhdx", FileSystemNodeKind.File, GiB(34), 1, 0, "Archive", now.AddHours(-12), 5, ".vhdx");
+        Add(nodes, 119, 102, "Camera Uploads", @"C:\Users\demo\OneDrive\Pictures\Camera Uploads", FileSystemNodeKind.Directory, GiB(17), 5_200, 280, "Image", now.AddDays(-120), 4);
+        Add(nodes, 120, 119, "vacation-archive.zip", @"C:\Users\demo\OneDrive\Pictures\Camera Uploads\vacation-archive.zip", FileSystemNodeKind.File, GiB(9.6), 1, 0, "Image", now.AddDays(-390), 5, ".zip");
+        Add(nodes, 121, 101, "vacation-archive-copy.zip", @"C:\Users\demo\Downloads\vacation-archive-copy.zip", FileSystemNodeKind.File, GiB(9.6), 1, 0, "Image", now.AddDays(-388), 4, ".zip");
 
         Add(nodes, 200, 11, "shop-ui", @"C:\Projects\shop-ui", FileSystemNodeKind.Directory, GiB(73), 488_000, 83_200, "Code", now.AddHours(-2), 2);
         Add(nodes, 201, 200, "node_modules", @"C:\Projects\shop-ui\node_modules", FileSystemNodeKind.Directory, GiB(46), 411_000, 77_000, "Code", now.AddDays(-6), 3);
@@ -181,10 +189,15 @@ internal static class DemoDataFactory
         Add(nodes, 206, 202, "app.bundle.js", @"C:\Projects\shop-ui\.next\static\app.bundle.js", FileSystemNodeKind.File, GiB(2.2), 1, 0, "Code", now.AddHours(-4), 4, ".js");
         Add(nodes, 207, 205, "dev-postgres-backup.bak", @"C:\Projects\docker-data\dev-postgres-backup.bak", FileSystemNodeKind.File, GiB(21.5), 1, 0, "Archive", now.AddDays(-48), 3, ".bak");
         Add(nodes, 208, 205, "linux-builder.vhdx", @"C:\Projects\docker-data\linux-builder.vhdx", FileSystemNodeKind.File, GiB(27.8), 1, 0, "Archive", now.AddDays(-16), 3, ".vhdx");
+        Add(nodes, 209, 11, "ml-lab", @"C:\Projects\ml-lab", FileSystemNodeKind.Directory, GiB(29), 22_500, 1_220, "Archive", now.AddDays(-5), 2);
+        Add(nodes, 210, 209, "artifacts", @"C:\Projects\ml-lab\artifacts", FileSystemNodeKind.Directory, GiB(16), 890, 80, "Archive", now.AddDays(-5), 3);
+        Add(nodes, 211, 210, "model-checkpoint.bin", @"C:\Projects\ml-lab\artifacts\model-checkpoint.bin", FileSystemNodeKind.File, GiB(9), 1, 0, "Archive", now.AddDays(-37), 4, ".bin");
+        Add(nodes, 212, 209, ".venv-cache", @"C:\Projects\ml-lab\.venv", FileSystemNodeKind.Directory, GiB(8.5), 132_000, 21_300, "Code", now.AddDays(-7), 3);
 
         Add(nodes, 300, 12, "SoftwareDistribution", @"C:\Windows\SoftwareDistribution\Download", FileSystemNodeKind.Directory, GiB(18.6), 71_200, 4_300, "System", now.AddDays(-9), 2);
         Add(nodes, 301, 12, "WinSxS", @"C:\Windows\WinSxS", FileSystemNodeKind.Directory, GiB(29), 214_300, 38_000, "System", now.AddHours(-9), 2);
         Add(nodes, 302, 12, "Logs", @"C:\Windows\Logs", FileSystemNodeKind.Directory, GiB(4.6), 12_500, 1_100, "Temporary", now.AddDays(-31), 2);
+        Add(nodes, 303, 12, "CrashDumps", @"C:\Windows\Temp\CrashDumps", FileSystemNodeKind.Directory, GiB(3.2), 430, 18, "Temporary", now.AddDays(-23), 2);
 
         Add(nodes, 400, 13, "WindowsApps", @"C:\Program Files\WindowsApps", FileSystemNodeKind.Directory, GiB(44), 182_000, 18_500, "System", now.AddDays(-2), 2);
         Add(nodes, 401, 13, "Microsoft Visual Studio", @"C:\Program Files\Microsoft Visual Studio", FileSystemNodeKind.Directory, GiB(28), 97_000, 12_300, "Installer", now.AddDays(-5), 2);
@@ -193,6 +206,8 @@ internal static class DemoDataFactory
         Add(nodes, 500, 14, "Package Cache", @"C:\ProgramData\Package Cache", FileSystemNodeKind.Directory, GiB(22), 13_500, 1_430, "Installer", now.AddDays(-120), 2);
         Add(nodes, 501, 14, "DockerDesktop", @"C:\ProgramData\DockerDesktop", FileSystemNodeKind.Directory, GiB(28), 18_000, 2_900, "Archive", now.AddDays(-3), 2);
         Add(nodes, 502, 14, "NVIDIA", @"C:\ProgramData\NVIDIA Corporation\Downloader", FileSystemNodeKind.Directory, GiB(7.4), 1_200, 100, "Installer", now.AddDays(-55), 2);
+        Add(nodes, 503, 500, "VS repair cache", @"C:\ProgramData\Package Cache\VisualStudioRepair", FileSystemNodeKind.Directory, GiB(9.2), 4_300, 310, "Installer", now.AddDays(-180), 3);
+        Add(nodes, 504, 501, "wsl-data.vhdx", @"C:\ProgramData\DockerDesktop\wsl-data.vhdx", FileSystemNodeKind.File, GiB(18.4), 1, 0, "Archive", now.AddDays(-2), 3, ".vhdx");
 
         return nodes;
     }
@@ -207,7 +222,12 @@ internal static class DemoDataFactory
             Finding(nodes, @"C:\Projects\shop-ui\node_modules", "Developer artifact", CleanupSafety.Review, CleanupActionKind.ClearCache, 0.84, "Generated dependency folder. Reinstall with package manager if still needed.", "NodeModules", "npm project", now),
             Finding(nodes, @"C:\Projects\shop-ui\.next", "Developer artifact", CleanupSafety.Safe, CleanupActionKind.ClearCache, 0.92, "Generated Next.js build cache.", "NextBuildCache", "Next.js", now),
             Finding(nodes, @"C:\Projects\.gradle", "Developer artifact", CleanupSafety.Review, CleanupActionKind.ClearCache, 0.82, "Gradle cache may be regenerated but can slow the next build.", "GradleCache", "Gradle", now),
+            Finding(nodes, @"C:\Users\demo\AppData\Local\pnpm-store", "Developer artifact", CleanupSafety.Safe, CleanupActionKind.ClearCache, 0.88, "pnpm store is reconstructable from project manifests.", "PnpmStore", "pnpm", now),
+            Finding(nodes, @"C:\Users\demo\AppData\Local\pip\Cache", "Developer artifact", CleanupSafety.Safe, CleanupActionKind.ClearCache, 0.86, "pip cache can be regenerated during package installs.", "PipCache", "pip", now),
+            Finding(nodes, @"C:\Users\demo\.cargo\registry", "Developer artifact", CleanupSafety.Review, CleanupActionKind.ClearCache, 0.76, "Cargo registry cache is rebuildable but may slow Rust builds.", "CargoRegistry", "Cargo", now),
+            Finding(nodes, @"C:\Users\demo\AppData\Local\Packages\CanonicalGroupLimited.Ubuntu\LocalState", "Virtualized storage", CleanupSafety.Review, CleanupActionKind.ArchiveOrMove, 0.7, "WSL virtual disk should be compacted or cleaned through WSL workflows.", "WslVhdx", "WSL", now),
             Finding(nodes, @"C:\Users\demo\Downloads", "Downloads review", CleanupSafety.Review, CleanupActionKind.ReviewDownloads, 0.72, "Large downloads, installers, and archives need manual review.", "DownloadsLargeOld", "User files", now),
+            Finding(nodes, @"C:\Windows\Temp\CrashDumps", "Crash dumps", CleanupSafety.Safe, CleanupActionKind.ClearCache, 0.9, "Old crash dumps can usually be cleared after diagnostics are no longer needed.", "CrashDumps", "Windows diagnostics", now),
             Finding(nodes, @"C:\Windows\SoftwareDistribution\Download", "Windows cleanup", CleanupSafety.UseSystemCleanup, CleanupActionKind.RunSystemCleanup, 0.94, "Windows Update cache should be cleared through official Windows cleanup routes.", "WindowsUpdateCache", "Windows Update", now),
             Finding(nodes, @"C:\ProgramData\Package Cache", "Installer cache", CleanupSafety.Review, CleanupActionKind.ArchiveOrMove, 0.62, "Installer cache can be required for repair/uninstall workflows.", "PackageCache", "Windows Installer", now),
             Finding(nodes, @"C:\Windows\WinSxS", "System managed storage", CleanupSafety.Blocked, CleanupActionKind.LeaveAlone, 1.0, "Component store is blocked from direct cleanup. Use DISM or Windows cleanup.", "BlockedSystemPath", "Windows", now),
@@ -223,7 +243,12 @@ internal static class DemoDataFactory
             Relationship(scanId, nodes, @"C:\Projects\shop-ui\.next", @"C:\Projects\shop-ui\next.config.js", FileSystemEdgeKind.PackageArtifact, "generated by", "Next.js", "Next.js build output pattern", 0.92),
             Relationship(scanId, nodes, @"C:\Users\demo\AppData\Local\Google\Chrome\User Data\Default\Cache", "Google Chrome", FileSystemEdgeKind.CacheOwnership, "cache of", "Chrome", "Known browser cache location", 0.9),
             Relationship(scanId, nodes, @"C:\ProgramData\DockerDesktop", "Docker Desktop", FileSystemEdgeKind.AppOwnership, "owned by", "Docker", "Known Docker Desktop data root", 0.86),
-            Relationship(scanId, nodes, @"C:\Users\demo\OneDrive", "OneDrive cloud storage", FileSystemEdgeKind.AppOwnership, "synced by", "OneDrive", "Cloud sync root naming and attributes", 0.78)
+            Relationship(scanId, nodes, @"C:\Users\demo\AppData\Local\pnpm-store", @"C:\Projects\shop-ui\pnpm-lock.yaml", FileSystemEdgeKind.PackageArtifact, "generated by", "pnpm", "pnpm store pattern linked to project lockfile", 0.86),
+            Relationship(scanId, nodes, @"C:\Users\demo\AppData\Local\pip\Cache", @"C:\Projects\ml-lab\requirements.txt", FileSystemEdgeKind.PackageArtifact, "generated by", "pip", "pip cache pattern linked to Python project", 0.82),
+            Relationship(scanId, nodes, @"C:\Users\demo\AppData\Local\Packages\CanonicalGroupLimited.Ubuntu\LocalState", "Ubuntu WSL", FileSystemEdgeKind.AppOwnership, "owned by", "WSL", "Known WSL package LocalState virtual disk root", 0.88),
+            Relationship(scanId, nodes, @"C:\Projects\ml-lab\artifacts", @"C:\Projects\ml-lab\train.py", FileSystemEdgeKind.PackageArtifact, "generated by", "ML training", "Model artifact naming and project path", 0.72),
+            Relationship(scanId, nodes, @"C:\Users\demo\OneDrive", "OneDrive cloud storage", FileSystemEdgeKind.AppOwnership, "synced by", "OneDrive", "Cloud sync root naming and attributes", 0.78),
+            Relationship(scanId, nodes, @"C:\Users\demo\OneDrive\Pictures\Camera Uploads", "OneDrive camera upload", FileSystemEdgeKind.AppOwnership, "synced by", "OneDrive", "Cloud-linked photo import root", 0.8)
         ];
     }
 
@@ -235,7 +260,10 @@ internal static class DemoDataFactory
             Change(scanId, nodes, @"C:\Users\demo\Downloads", ChangeKind.Modified, GiB(91), GiB(84), "Old installer cleanup reduced downloads"),
             Change(scanId, nodes, @"C:\ProgramData\DockerDesktop", ChangeKind.Added, 0, GiB(28), "Docker images were created since previous scan"),
             Change(scanId, nodes, @"C:\Windows\SoftwareDistribution\Download", ChangeKind.Modified, GiB(7), GiB(18.6), "Windows Update cache grew"),
-            Change(scanId, nodes, @"C:\Users\demo\AppData\Local\Temp", ChangeKind.Modified, GiB(12), GiB(7.9), "Temp cleanup reduced local temp files")
+            Change(scanId, nodes, @"C:\Users\demo\AppData\Local\Temp", ChangeKind.Modified, GiB(12), GiB(7.9), "Temp cleanup reduced local temp files"),
+            Change(scanId, nodes, @"C:\Users\demo\AppData\Local\Packages\CanonicalGroupLimited.Ubuntu\LocalState", ChangeKind.Modified, GiB(22), GiB(36), "WSL virtual disk expanded during package installs"),
+            Change(scanId, nodes, @"C:\Projects\ml-lab\artifacts", ChangeKind.Added, 0, GiB(16), "Model training artifacts were created"),
+            Change(scanId, nodes, @"C:\Users\demo\AppData\Local\pnpm-store", ChangeKind.Modified, GiB(3.2), GiB(6.2), "pnpm store grew after workspace restore")
         ];
     }
 

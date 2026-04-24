@@ -1,6 +1,6 @@
 # Disk Space Inspector
 
-Disk Space Inspector is a Windows-first storage visualizer and cleanup advisor. It scans drives, persists snapshots in SQLite, renders dense treemap/sunburst views, explains what owns space, and stages cleanup recommendations with conservative safety guardrails.
+Disk Space Inspector is a Windows-first storage visualizer and cleanup advisor. It scans drives, persists snapshots in SQLite, renders dense treemap/sunburst views, explains what owns space, and stages cleanup recommendations with conservative safety guardrails. V4 adds a premium Visual Lab with 24+ deterministic storage analytics charts backed by scan data.
 
 ![Overview dashboard](docs/screenshots/overview.png)
 
@@ -8,16 +8,24 @@ Disk Space Inspector is a Windows-first storage visualizer and cleanup advisor. 
 
 - Scans accessible Windows drives without requiring elevation for the basic pass.
 - Shows a high-density Overview, Explore workspace, Visualize workspace, Cleanup advisor, Changes view, and Insights view.
-- Renders squarified treemaps, sunburst hierarchy, file type breakdowns, age histograms, and cleanup potential lanes.
+- Renders squarified treemaps, sunburst hierarchy, file type breakdowns, age histograms, cleanup potential lanes, and a dedicated Visual Lab.
+- Adds 24+ Visual Lab analytics: Pareto curves, heatmaps, scatter plots, radar charts, bubble packs, timeline/waterfall charts, ownership flows, cloud/local views, dependency-cache comparisons, and cleanup effort/value scoring.
 - Records scan gaps such as access-denied folders instead of silently hiding them.
 - Classifies temp files, recycle bin content, browser/app caches, developer artifacts, downloads, package caches, Windows cleanup targets, large files, and blocked system paths.
 - Uses Codex CLI ChatGPT login for optional AI cleanup recommendations without reading or storing Codex credentials.
+- Includes in-app tutorials plus docs under `docs/tutorials/`.
 
 ## Screenshots
 
 ![Visualizer workspace](docs/screenshots/visualize.png)
 
+![Visual Lab](docs/screenshots/visual-lab.png)
+
 ![Cleanup advisor](docs/screenshots/cleanup.png)
+
+![Insights and relationships](docs/screenshots/insights.png)
+
+![Guided tutorials](docs/screenshots/tutorials.png)
 
 ## Projects
 
@@ -40,6 +48,12 @@ dotnet run --project src\DiskSpaceInspector.App\DiskSpaceInspector.App.csproj --
 
 The app runs unelevated and records permission gaps instead of hiding them. Cleanup is staged for review only; this version does not directly delete files.
 
+## Visual Lab
+
+Visual Lab computes charts from the loaded scan rather than using static mock values. Demo mode seeds fake non-personal drives, package caches, WSL/Docker roots, cloud-linked folders, stale media, installer caches, duplicate-like archives, scan gaps, changes, and ownership evidence so every chart has meaningful data.
+
+The default section shows curated best insights. The `Advanced algorithms` expander reveals deeper charts for ownership, package-manager footprint, system/dev roots, stale-data scoring, entropy, and risk lanes.
+
 ## Codex AI Cleanup Advisor
 
 Disk Space Inspector can ask Codex to rank and explain cleanup candidates after a scan. The app delegates sign-in to the Codex CLI so you can use ChatGPT/Codex OAuth instead of pasting an API key.
@@ -61,6 +75,13 @@ dotnet test tests\DiskSpaceInspector.Tests\DiskSpaceInspector.Tests.csproj --no-
 ```
 
 Use `-m:1` on this machine to avoid transient project-reference file locks during WPF builds.
+
+## Tutorials
+
+- [First scan](docs/tutorials/first-scan.md)
+- [Visual Lab](docs/tutorials/visual-lab.md)
+- [Cleanup safety](docs/tutorials/cleanup-safety.md)
+- [Codex AI advisor](docs/tutorials/codex-ai.md)
 
 ## License
 
