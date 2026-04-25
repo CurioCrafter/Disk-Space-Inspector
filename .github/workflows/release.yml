@@ -1,0 +1,52 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  github-release:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+
+      - name: Restore
+        run: dotnet restore DiskSpaceInspector.sln
+
+      - name: Build
+        run: dotnet build DiskSpaceInspector.sln --no-restore -m:1 -v:minimal
+
+      - name: Test
+        run: dotnet test tests\DiskSpaceInspector.Tests\DiskSpaceInspector.Tests.csproj --no-restore -m:1 -v:minimal
+
+      - name: Install Inno Setup
+        run: choco install innosetup --no-progress -y
+
+      - name: Package release artifacts
+        shell: pwsh
+        run: |
+          $version = "${{ github.ref_name }}".TrimStart("v")
+          $env:PATH += ";C:\Program Files (x86)\Inno Setup 6"
+          .\scripts\package-release.ps1 -Version $version
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Disk Space Inspector ${{ github.ref_name }}
+          body_path: docs/releases/${{ github.ref_name }}.md
+          prerelease: true
+          files: |
+            artifacts/release/DiskSpaceInspector-*-win-x64.zip
+            artifacts/release/DiskSpaceInspectorSetup-*.exe
+            artifacts/release/SHA256SUMS.txt

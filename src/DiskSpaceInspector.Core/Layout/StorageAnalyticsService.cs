@@ -479,6 +479,7 @@ public sealed class StorageAnalyticsService : IStorageAnalyticsService
     {
         return
         [
+            Tutorial("download", "Download and first run", "Try the app without building it", "Use the installer or portable ZIP from GitHub Releases. The first-run screen can open demo data without scanning private drives.", "Click Open demo workspace for a safe tour, or Scan this PC for local results.", "Preview builds are unsigned and no telemetry is collected."),
             Tutorial("first-scan", "Run a first scan", "Get useful results fast", "Pick a drive and use Scan selected. Disk Space Inspector records permission gaps instead of hiding them.", "Open Overview and watch accounted bytes, throughput, and scan gaps.", "Scanning is read-only."),
             Tutorial("visual-lab", "Use Visual Lab", "Find the strongest storage story", "Start with Best insights, then expand Advanced algorithms when you need a deeper explanation.", "Click a chart item to sync the selected path when the chart has a node-backed point.", "Charts explain; cleanup still happens through review lanes."),
             Tutorial("cleanup", "Stage cleanup safely", "Separate Safe, Review, System, and Blocked", "Safe means staged for review, Review means inspect ownership, System means use official Windows/app cleanup, Blocked means leave alone.", "Use Cleanup and inspect evidence before staging.", "No direct destructive action is performed in this version."),

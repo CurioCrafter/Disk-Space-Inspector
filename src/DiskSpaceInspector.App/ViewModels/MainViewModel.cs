@@ -7,8 +7,10 @@ using DiskSpaceInspector.Core.Ai;
 using DiskSpaceInspector.Core.Cleanup;
 using DiskSpaceInspector.Core.Layout;
 using DiskSpaceInspector.Core.Models;
+using DiskSpaceInspector.Core.Reporting;
 using DiskSpaceInspector.Core.Scanning;
 using DiskSpaceInspector.Core.Services;
+using DiskSpaceInspector.Core.State;
 using DiskSpaceInspector.Core.Windows;
 using DiskSpaceInspector.Storage;
 
@@ -16,6 +18,11 @@ namespace DiskSpaceInspector.App.ViewModels;
 
 public sealed class MainViewModel : ObservableObject
 {
+    private const int OverviewWorkspaceIndex = 0;
+    private const int CleanupWorkspaceIndex = 4;
+    private const int TutorialsWorkspaceIndex = 7;
+    private const int SettingsWorkspaceIndex = 8;
+
     private readonly IDriveDiscoveryService _driveDiscovery;
     private readonly IFileSystemScanner _scanner;
     private readonly ICleanupClassifier _classifier;
@@ -26,7 +33,11 @@ public sealed class MainViewModel : ObservableObject
     private readonly IScanStore _scanStore;
     private readonly IAiCleanupAdvisor _aiAdvisor;
     private readonly ICodexAuthService _codexAuthService;
+    private readonly IReportExportService _reportExportService;
+    private readonly IFirstRunStateStore _firstRunStateStore;
     private readonly CleanupPlanBuilder _cleanupPlanBuilder = new();
+    private readonly string _databasePath;
+    private readonly string _reportsDirectory;
 
     private ScanResult? _currentScan;
     private IReadOnlyList<StorageRelationship> _currentRelationships = [];
@@ -65,6 +76,9 @@ public sealed class MainViewModel : ObservableObject
     private string _aiStatusText = "Codex AI uses your Codex ChatGPT login. Click Check Codex status or Login with Codex.";
     private string _aiRecommendationSummary = "No AI recommendations yet.";
     private string _visualLabSummary = "Run a scan or open demo mode to generate visual analytics.";
+    private string _reportExportStatus = "Diagnostics exports are local and path-redacted by default.";
+    private int _selectedWorkspaceIndex;
+    private bool _isFirstRunWelcomeVisible = true;
     private bool _isAiBusy;
     private AiCleanupRecommendationViewModel? _selectedAiRecommendation;
 
@@ -77,12 +91,13 @@ public sealed class MainViewModel : ObservableObject
             new SunburstLayoutService(),
             new StorageBreakdownService(),
             new StorageAnalyticsService(),
-            new SqliteScanStore(Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "Disk Space Inspector",
-                "disk-space-inspector.db")),
+            new SqliteScanStore(DefaultDatabasePath()),
             new CodexCliCleanupAdvisor(),
             new CodexAuthService(),
+            new ReportExportService(),
+            new JsonFirstRunStateStore(DefaultFirstRunStatePath()),
+            DefaultDatabasePath(),
+            DefaultReportsDirectory(),
             IsDemoMode())
     {
     }
@@ -98,6 +113,10 @@ public sealed class MainViewModel : ObservableObject
         IScanStore scanStore,
         IAiCleanupAdvisor? aiAdvisor = null,
         ICodexAuthService? codexAuthService = null,
+        IReportExportService? reportExportService = null,
+        IFirstRunStateStore? firstRunStateStore = null,
+        string? databasePath = null,
+        string? reportsDirectory = null,
         bool demoMode = false)
     {
         _driveDiscovery = driveDiscovery;
@@ -110,8 +129,12 @@ public sealed class MainViewModel : ObservableObject
         _scanStore = scanStore;
         _aiAdvisor = aiAdvisor ?? new CodexCliCleanupAdvisor();
         _codexAuthService = codexAuthService ?? new CodexAuthService();
+        _reportExportService = reportExportService ?? new ReportExportService();
+        _firstRunStateStore = firstRunStateStore ?? new JsonFirstRunStateStore(DefaultFirstRunStatePath());
+        _databasePath = databasePath ?? DefaultDatabasePath();
+        _reportsDirectory = reportsDirectory ?? DefaultReportsDirectory();
 
-        RefreshDrivesCommand = new RelayCommand(_ => RefreshDrives());
+        RefreshDrivesCommand = new AsyncRelayCommand(() => RefreshDrivesAsync(force: true), () => !IsScanning);
         ScanSelectedCommand = new AsyncRelayCommand(ScanSelectedAsync, () => SelectedVolume?.Model.IsReady == true && !IsScanning);
         ScanAllCommand = new AsyncRelayCommand(ScanAllAsync, () => Volumes.Any(v => v.Model.IsReady) && !IsScanning);
         CancelScanCommand = new RelayCommand(_ => _scanCancellation?.Cancel(), _ => IsScanning);
@@ -146,6 +169,13 @@ public sealed class MainViewModel : ObservableObject
         AskAiCleanupAdvisorCommand = new AsyncRelayCommand(AskAiCleanupAdvisorAsync, CanAskAiCleanupAdvisor);
         StageAiRecommendationCommand = new RelayCommand(_ => StageSelectedAiRecommendation(), _ => SelectedAiRecommendation is not null);
         VisualChartSelectedCommand = new RelayCommand(HandleVisualChartSelection);
+        LoadDemoCommand = new RelayCommand(_ => LoadDemoData());
+        ShowCleanupSafetyCommand = new RelayCommand(_ => ShowCleanupSafetyGuide());
+        OpenPrivacyCenterCommand = new RelayCommand(_ => SelectedWorkspaceIndex = SettingsWorkspaceIndex);
+        ExportDiagnosticsCommand = new AsyncRelayCommand(ExportDiagnosticsAsync, () => _currentScan is not null && !IsScanning);
+
+        BuildPrivacyFacts();
+        _ = MarkAppOpenedAsync();
 
         if (demoMode)
         {
@@ -153,8 +183,11 @@ public sealed class MainViewModel : ObservableObject
         }
         else
         {
-            RefreshDrives();
+            IsFirstRunWelcomeVisible = true;
+            _ = RefreshDrivesAsync(force: false);
         }
+
+        SelectedWorkspaceIndex = InitialWorkspaceIndex();
     }
 
     public ObservableCollection<VolumeViewModel> Volumes { get; } = [];
@@ -193,7 +226,11 @@ public sealed class MainViewModel : ObservableObject
 
     public ObservableCollection<TutorialStepViewModel> TutorialSteps { get; } = [];
 
-    public RelayCommand RefreshDrivesCommand { get; }
+    public ObservableCollection<QuickFindingViewModel> FiveMinuteFindings { get; } = [];
+
+    public ObservableCollection<PrivacyFactViewModel> PrivacyFacts { get; } = [];
+
+    public AsyncRelayCommand RefreshDrivesCommand { get; }
 
     public AsyncRelayCommand ScanSelectedCommand { get; }
 
@@ -226,6 +263,14 @@ public sealed class MainViewModel : ObservableObject
     public RelayCommand StageAiRecommendationCommand { get; }
 
     public RelayCommand VisualChartSelectedCommand { get; }
+
+    public RelayCommand LoadDemoCommand { get; }
+
+    public RelayCommand ShowCleanupSafetyCommand { get; }
+
+    public RelayCommand OpenPrivacyCenterCommand { get; }
+
+    public AsyncRelayCommand ExportDiagnosticsCommand { get; }
 
     public VolumeViewModel? SelectedVolume
     {
@@ -276,6 +321,7 @@ public sealed class MainViewModel : ObservableObject
         {
             if (SetProperty(ref _isScanning, value))
             {
+                RefreshDrivesCommand.RaiseCanExecuteChanged();
                 ScanSelectedCommand.RaiseCanExecuteChanged();
                 ScanAllCommand.RaiseCanExecuteChanged();
                 CancelScanCommand.RaiseCanExecuteChanged();
@@ -283,6 +329,7 @@ public sealed class MainViewModel : ObservableObject
                 ResumeScanCommand.RaiseCanExecuteChanged();
                 LoadLatestCommand.RaiseCanExecuteChanged();
                 AskAiCleanupAdvisorCommand.RaiseCanExecuteChanged();
+                ExportDiagnosticsCommand.RaiseCanExecuteChanged();
             }
         }
     }
@@ -450,6 +497,34 @@ public sealed class MainViewModel : ObservableObject
         private set => SetProperty(ref _visualLabSummary, value);
     }
 
+    public string ReportExportStatus
+    {
+        get => _reportExportStatus;
+        private set => SetProperty(ref _reportExportStatus, value);
+    }
+
+    public string DatabasePath => RedactLocalDisplayPath(_databasePath);
+
+    public string ReportsDirectory => RedactLocalDisplayPath(_reportsDirectory);
+
+    public string TelemetryStatus => $"{PrivacyAndSafetyFacts.TelemetryMode} telemetry. No background usage or crash reporting is sent.";
+
+    public string CodexCredentialPolicy => PrivacyAndSafetyFacts.CodexCredentialPolicy;
+
+    public string BlockedDirectCleanupPaths => string.Join("; ", PrivacyAndSafetyFacts.BlockedDirectCleanupPaths);
+
+    public int SelectedWorkspaceIndex
+    {
+        get => _selectedWorkspaceIndex;
+        set => SetProperty(ref _selectedWorkspaceIndex, value);
+    }
+
+    public bool IsFirstRunWelcomeVisible
+    {
+        get => _isFirstRunWelcomeVisible;
+        private set => SetProperty(ref _isFirstRunWelcomeVisible, value);
+    }
+
     public bool IsAiBusy
     {
         get => _isAiBusy;
@@ -491,10 +566,27 @@ public sealed class MainViewModel : ObservableObject
         RefreshConnections();
     }
 
-    private void RefreshDrives()
+    private async Task RefreshDrivesAsync(bool force)
     {
+        StatusText = "Discovering drives.";
+        IReadOnlyList<VolumeInfo> volumes;
+        try
+        {
+            volumes = await Task.Run(() => _driveDiscovery.GetVolumes().ToList()).ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"Drive discovery failed: {ex.Message}";
+            return;
+        }
+
+        if (!force && _currentScan is not null)
+        {
+            return;
+        }
+
         Volumes.Clear();
-        foreach (var volume in _driveDiscovery.GetVolumes())
+        foreach (var volume in volumes)
         {
             Volumes.Add(new VolumeViewModel(volume));
         }
@@ -506,6 +598,8 @@ public sealed class MainViewModel : ObservableObject
 
     private void LoadDemoData()
     {
+        IsFirstRunWelcomeVisible = false;
+        SelectedWorkspaceIndex = OverviewWorkspaceIndex;
         var demo = DemoDataFactory.Create();
 
         Volumes.Clear();
@@ -536,12 +630,140 @@ public sealed class MainViewModel : ObservableObject
         ScanGapText = $"{demo.Scan.Issues.Count:n0} scan gaps";
         ScanQueueText = "0 queued";
         ScanDetail = $"{demo.Scan.Session.FilesScanned:n0} files, {demo.Scan.Session.DirectoriesScanned:n0} folders, {ByteFormatter.Format(demo.Scan.Session.TotalPhysicalBytes)} physical usage";
+        _ = MarkDemoLoadedAsync();
     }
 
     private static bool IsDemoMode()
     {
         return Environment.GetCommandLineArgs()
             .Any(arg => string.Equals(arg, "--demo", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static int InitialWorkspaceIndex()
+    {
+        foreach (var arg in Environment.GetCommandLineArgs())
+        {
+            if (!arg.StartsWith("--view=", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            return arg["--view=".Length..].Trim().ToLowerInvariant() switch
+            {
+                "cleanup" => CleanupWorkspaceIndex,
+                "tutorials" or "guide" => TutorialsWorkspaceIndex,
+                "settings" or "privacy" or "safety" => SettingsWorkspaceIndex,
+                "visual-lab" or "lab" => 3,
+                _ => OverviewWorkspaceIndex
+            };
+        }
+
+        return OverviewWorkspaceIndex;
+    }
+
+    private static string DefaultAppDataDirectory()
+    {
+        return Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "Disk Space Inspector");
+    }
+
+    private static string DefaultDatabasePath()
+    {
+        return Path.Combine(DefaultAppDataDirectory(), "disk-space-inspector.db");
+    }
+
+    private static string DefaultFirstRunStatePath()
+    {
+        return Path.Combine(DefaultAppDataDirectory(), "first-run-state.json");
+    }
+
+    private static string DefaultReportsDirectory()
+    {
+        return Path.Combine(DefaultAppDataDirectory(), "Reports");
+    }
+
+    private static string RedactLocalDisplayPath(string path)
+    {
+        var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        if (!string.IsNullOrWhiteSpace(localAppData) && path.StartsWith(localAppData, StringComparison.OrdinalIgnoreCase))
+        {
+            return "%LOCALAPPDATA%" + path[localAppData.Length..];
+        }
+
+        var userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        if (!string.IsNullOrWhiteSpace(userProfile) && path.StartsWith(userProfile, StringComparison.OrdinalIgnoreCase))
+        {
+            return "%USERPROFILE%" + path[userProfile.Length..];
+        }
+
+        return path;
+    }
+
+    private void BuildPrivacyFacts()
+    {
+        PrivacyFacts.Clear();
+        PrivacyFacts.Add(new PrivacyFactViewModel(
+            "Telemetry",
+            "Off",
+            "No background analytics, usage tracking, or crash upload service is wired into this app."));
+        PrivacyFacts.Add(new PrivacyFactViewModel(
+            "Local database",
+            RedactLocalDisplayPath(_databasePath),
+            "Scan snapshots stay in your local app data folder unless you export a report."));
+        PrivacyFacts.Add(new PrivacyFactViewModel(
+            "Codex credentials",
+            "CLI-owned",
+            PrivacyAndSafetyFacts.CodexCredentialPolicy));
+        PrivacyFacts.Add(new PrivacyFactViewModel(
+            "Cleanup execution",
+            "Advisory only",
+            "This version stages recommendations for review and does not directly delete files."));
+    }
+
+    private async Task MarkAppOpenedAsync()
+    {
+        try
+        {
+            var now = DateTimeOffset.UtcNow;
+            var state = await _firstRunStateStore.LoadAsync().ConfigureAwait(false);
+            state.HasOpenedApp = true;
+            state.FirstOpenedAtUtc ??= now;
+            state.LastOpenedAtUtc = now;
+            await _firstRunStateStore.SaveAsync(state).ConfigureAwait(false);
+        }
+        catch
+        {
+            // First-run state should never block the main app experience.
+        }
+    }
+
+    private async Task MarkDemoLoadedAsync()
+    {
+        try
+        {
+            var state = await _firstRunStateStore.LoadAsync().ConfigureAwait(false);
+            state.HasLoadedDemo = true;
+            state.LastDemoLoadedAtUtc = DateTimeOffset.UtcNow;
+            await _firstRunStateStore.SaveAsync(state).ConfigureAwait(false);
+        }
+        catch
+        {
+        }
+    }
+
+    private async Task MarkScanLoadedAsync()
+    {
+        try
+        {
+            var state = await _firstRunStateStore.LoadAsync().ConfigureAwait(false);
+            state.HasLoadedScan = true;
+            state.LastScanLoadedAtUtc = DateTimeOffset.UtcNow;
+            await _firstRunStateStore.SaveAsync(state).ConfigureAwait(false);
+        }
+        catch
+        {
+        }
     }
 
     private async Task ScanSelectedAsync()
@@ -572,6 +794,7 @@ public sealed class MainViewModel : ObservableObject
             return;
         }
 
+        IsFirstRunWelcomeVisible = false;
         IsScanning = true;
         IsPaused = false;
         _scanCancellation = new CancellationTokenSource();
@@ -700,6 +923,7 @@ public sealed class MainViewModel : ObservableObject
         if (result is null)
         {
             StatusText = "No saved scans found.";
+            IsFirstRunWelcomeVisible = true;
             return;
         }
 
@@ -725,6 +949,7 @@ public sealed class MainViewModel : ObservableObject
 
         _currentScan = result;
         _currentRelationships = relationshipList;
+        IsFirstRunWelcomeVisible = false;
         _nodes = result.Nodes.ToDictionary(n => n.Id);
         _childrenByParent = result.Nodes
             .Where(n => n.ParentId is not null)
@@ -756,6 +981,7 @@ public sealed class MainViewModel : ObservableObject
         SelectedAiRecommendation = null;
         AiRecommendationSummary = "No AI recommendations yet.";
         AskAiCleanupAdvisorCommand.RaiseCanExecuteChanged();
+        ExportDiagnosticsCommand.RaiseCanExecuteChanged();
 
         EvidenceRelationships.Clear();
         foreach (var relationship in _currentRelationships.OrderByDescending(r => r.Evidence.Confidence).Take(2000))
@@ -764,6 +990,7 @@ public sealed class MainViewModel : ObservableObject
         }
 
         RefreshOverviewCollections();
+        RefreshFiveMinuteFindings(result, findingList, relationshipList, changeList);
         RefreshVisualLab(result, findingList, relationshipList, changeList);
 
         TreeNodes.Clear();
@@ -779,6 +1006,7 @@ public sealed class MainViewModel : ObservableObject
             : $"{result.Issues.Count:n0} scan gaps recorded. Permission-denied and inaccessible paths are tracked instead of hidden.";
         WarningSummary = issueSummary;
         ScanDetail = $"{result.Session.FilesScanned:n0} files, {result.Session.DirectoriesScanned:n0} folders, {ByteFormatter.Format(result.Session.TotalPhysicalBytes)} physical usage";
+        _ = MarkScanLoadedAsync();
     }
 
     private List<CleanupFinding> Classify(IEnumerable<FileSystemNode> nodes)
@@ -982,6 +1210,7 @@ public sealed class MainViewModel : ObservableObject
         TypeBreakdown.Clear();
         AgeHistogram.Clear();
         CleanupPotential.Clear();
+        FiveMinuteFindings.Clear();
 
         if (_currentScan is null)
         {
@@ -1017,6 +1246,106 @@ public sealed class MainViewModel : ObservableObject
         foreach (var item in _breakdownService.BuildCleanupPotential(_findingsByNode.Values))
         {
             CleanupPotential.Add(new StorageBreakdownItemViewModel(item));
+        }
+    }
+
+    private void RefreshFiveMinuteFindings(
+        ScanResult result,
+        IReadOnlyList<CleanupFinding> findings,
+        IReadOnlyList<StorageRelationship> relationships,
+        IReadOnlyList<ChangeRecord> changes)
+    {
+        FiveMinuteFindings.Clear();
+
+        var safeBytes = findings
+            .Where(f => f.Safety == CleanupSafety.Safe)
+            .Sum(f => f.SizeBytes);
+        var reviewBytes = findings
+            .Where(f => f.Safety == CleanupSafety.Review)
+            .Sum(f => f.SizeBytes);
+        FiveMinuteFindings.Add(new QuickFindingViewModel(
+            "Safest reclaimable",
+            ByteFormatter.Format(safeBytes),
+            $"{ByteFormatter.Format(reviewBytes)} more is review-only.",
+            "Safe"));
+
+        var topOwner = relationships
+            .Where(r => !string.IsNullOrWhiteSpace(r.Owner))
+            .GroupBy(r => r.Owner)
+            .Select(g => new
+            {
+                Owner = g.Key,
+                Size = g
+                    .Select(r => _nodes.TryGetValue(r.SourceNodeId, out var node) ? SizeOf(node) : 0)
+                    .Sum()
+            })
+            .OrderByDescending(g => g.Size)
+            .FirstOrDefault();
+        FiveMinuteFindings.Add(new QuickFindingViewModel(
+            "Top owner signal",
+            topOwner is null ? "Unknown" : topOwner.Owner,
+            topOwner is null ? "Run enrichment or load demo data for ownership evidence." : $"{ByteFormatter.Format(topOwner.Size)} tied to evidence.",
+            "Owner"));
+
+        var growth = changes
+            .Where(c => c.DeltaBytes > 0)
+            .OrderByDescending(c => c.DeltaBytes)
+            .FirstOrDefault();
+        FiveMinuteFindings.Add(new QuickFindingViewModel(
+            "Biggest growth",
+            growth is null ? "No growth" : ByteFormatter.Format(growth.DeltaBytes),
+            growth is null ? "No positive deltas in this snapshot." : $"{Path.GetFileName(growth.Path.TrimEnd('\\'))}: {growth.Reason}",
+            "Growth"));
+
+        FiveMinuteFindings.Add(new QuickFindingViewModel(
+            "Scan gaps",
+            result.Issues.Count.ToString("n0"),
+            result.Issues.Count == 0 ? "No inaccessible paths recorded." : "Permission gaps are tracked instead of hidden.",
+            result.Issues.Count == 0 ? "OK" : "Warning"));
+
+        FiveMinuteFindings.Add(new QuickFindingViewModel(
+            "AI cleanup",
+            _codexAuthStatus.CanUseChatGpt ? "Ready" : "Optional",
+            _codexAuthStatus.CanUseChatGpt ? "Ask Codex AI can rank loaded candidates." : "Use Codex login when you want a second opinion.",
+            "AI"));
+    }
+
+    private void ShowCleanupSafetyGuide()
+    {
+        SelectedWorkspaceIndex = TutorialsWorkspaceIndex;
+        StatusText = "Open the cleanup safety guide before staging recommendations.";
+    }
+
+    private async Task ExportDiagnosticsAsync()
+    {
+        if (_currentScan is null)
+        {
+            ReportExportStatus = "Load a scan or demo workspace before exporting diagnostics.";
+            return;
+        }
+
+        try
+        {
+            var outputDirectory = Path.Combine(_reportsDirectory, DateTimeOffset.Now.ToString("yyyyMMdd-HHmmss"));
+            var bundle = await _reportExportService.ExportAsync(
+                _currentScan,
+                _findingsByNode.Values,
+                _currentRelationships,
+                Changes.Select(c => c.Model),
+                Insights.Select(i => i.Model),
+                new ReportExportOptions
+                {
+                    OutputDirectory = outputDirectory,
+                    PathPrivacyMode = PathPrivacyMode.RedactedUserProfile
+                }).ConfigureAwait(true);
+
+            ReportExportStatus = $"Exported {bundle.FileCount:n0} files to {RedactLocalDisplayPath(bundle.DirectoryPath)}. Redacted {bundle.RedactedPathCount:n0} path segments.";
+            StatusText = "Diagnostics report exported locally.";
+            Process.Start(new ProcessStartInfo("explorer.exe", $"\"{bundle.DirectoryPath}\"") { UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            ReportExportStatus = $"Diagnostics export failed: {ex.Message}";
         }
     }
 
