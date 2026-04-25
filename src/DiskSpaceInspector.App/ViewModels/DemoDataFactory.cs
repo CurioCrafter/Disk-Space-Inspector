@@ -9,8 +9,7 @@ internal sealed record DemoData(
     IReadOnlyList<CleanupFinding> CleanupFindings,
     IReadOnlyList<StorageRelationship> Relationships,
     IReadOnlyList<ChangeRecord> Changes,
-    IReadOnlyList<InsightFinding> Insights,
-    IReadOnlyList<AiCleanupRecommendation> AiRecommendations);
+    IReadOnlyList<InsightFinding> Insights);
 
 internal static class DemoDataFactory
 {
@@ -24,7 +23,6 @@ internal static class DemoDataFactory
         var relationships = BuildRelationships(scanId, nodes);
         var changes = BuildChanges(scanId, nodes);
         var insights = BuildInsights(scanId, findings, relationships);
-        var aiRecommendations = BuildAiRecommendations(findings);
 
         var scan = new ScanResult
         {
@@ -139,8 +137,7 @@ internal static class DemoDataFactory
             findings,
             relationships,
             changes,
-            insights,
-            aiRecommendations);
+            insights);
     }
 
     private static List<FileSystemNode> BuildNodes(DateTimeOffset now)
@@ -312,43 +309,6 @@ internal static class DemoDataFactory
         return insights
             .OrderByDescending(i => i.SizeBytes)
             .ThenByDescending(i => i.Confidence)
-            .ToList();
-    }
-
-    private static IReadOnlyList<AiCleanupRecommendation> BuildAiRecommendations(IReadOnlyList<CleanupFinding> findings)
-    {
-        return findings
-            .Where(f => f.Safety != CleanupSafety.Blocked)
-            .OrderBy(f => f.Safety)
-            .ThenByDescending(f => f.SizeBytes)
-            .Take(8)
-            .Select(f => new AiCleanupRecommendation
-            {
-                SourceFindingId = f.Id,
-                NodeId = f.NodeId,
-                Path = f.Path,
-                DisplayName = f.DisplayName,
-                Category = f.Category,
-                Safety = f.Safety,
-                RecommendedAction = f.RecommendedAction,
-                AiVerb = f.Safety switch
-                {
-                    CleanupSafety.Safe => f.RecommendedAction == CleanupActionKind.EmptyRecycleBin ? "Empty recycle bin" : "Clear cache",
-                    CleanupSafety.UseSystemCleanup => "Run Windows cleanup",
-                    _ => "Review first"
-                },
-                SizeBytes = f.SizeBytes,
-                Confidence = Math.Min(0.98, f.Confidence),
-                Reasoning = f.Safety == CleanupSafety.Safe
-                    ? "Low-risk cache cleanup."
-                    : "Large item with ownership or reinstall impact.",
-                Evidence = f.MatchedRule,
-                Guardrail = f.Safety == CleanupSafety.UseSystemCleanup
-                    ? "System cleanup only; direct deletion blocked."
-                    : "Path-limited; blocked/system guardrails preserved.",
-                CanStage = f.Safety is CleanupSafety.Safe or CleanupSafety.Review,
-                Model = "Demo Codex advisory"
-            })
             .ToList();
     }
 

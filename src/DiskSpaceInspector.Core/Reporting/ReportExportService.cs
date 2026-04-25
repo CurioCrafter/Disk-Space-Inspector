@@ -157,7 +157,7 @@ public sealed class ReportExportService : IReportExportService
             {
                 telemetry = PrivacyAndSafetyFacts.TelemetryMode,
                 networkTelemetryEnabled = PrivacyAndSafetyFacts.NetworkTelemetryEnabled,
-                codexCredentialPolicy = PrivacyAndSafetyFacts.CodexCredentialPolicy,
+                externalIntegrationPolicy = PrivacyAndSafetyFacts.ExternalIntegrationPolicy,
                 pathPrivacyMode = options.PathPrivacyMode.ToString()
             },
             scan = new
@@ -245,7 +245,7 @@ public sealed class ReportExportService : IReportExportService
             - Telemetry: {PrivacyAndSafetyFacts.TelemetryMode}
             - Network telemetry enabled: {PrivacyAndSafetyFacts.NetworkTelemetryEnabled}
             - Redacted paths: {redactedPaths:n0}
-            - Codex credentials: delegated to Codex CLI; Disk Space Inspector does not read stored OAuth tokens.
+            - External integrations: none; reports are generated locally.
             """;
     }
 }

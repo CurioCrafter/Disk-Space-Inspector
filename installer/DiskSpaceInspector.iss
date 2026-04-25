@@ -1,9 +1,9 @@
 #define MyAppName "Disk Space Inspector"
 #ifndef MyAppVersion
-#define MyAppVersion "0.5.0-preview.1"
+#define MyAppVersion "1.0.0"
 #endif
 #ifndef SourceDir
-#define SourceDir "..\artifacts\publish\DiskSpaceInspector-0.5.0-preview.1-win-x64"
+#define SourceDir "..\artifacts\publish\DiskSpaceInspector-1.0.0-win-x64"
 #endif
 #ifndef OutputDir
 #define OutputDir "..\artifacts\release"

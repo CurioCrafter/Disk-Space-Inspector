@@ -1,5 +1,5 @@
 param(
-    [string]$Version = "0.5.0-preview.1",
+    [string]$Version = "1.0.0",
     [string]$Configuration = "Release",
     [string]$Runtime = "win-x64",
     [switch]$SkipInstaller
@@ -14,6 +14,14 @@ $zipPath = Join-Path $releaseDir "DiskSpaceInspector-$Version-$Runtime.zip"
 $checksumsPath = Join-Path $releaseDir "SHA256SUMS.txt"
 
 New-Item -ItemType Directory -Force -Path $publishDir, $releaseDir | Out-Null
+
+Get-ChildItem $releaseDir -File |
+    Where-Object {
+        $_.Name -like "DiskSpaceInspector-*-win-x64.zip" -or
+        $_.Name -like "DiskSpaceInspectorSetup-*.exe" -or
+        $_.Name -eq "SHA256SUMS.txt"
+    } |
+    Remove-Item -Force
 
 dotnet publish (Join-Path $root "src\DiskSpaceInspector.App\DiskSpaceInspector.App.csproj") `
     --configuration $Configuration `

@@ -63,13 +63,13 @@ public sealed class PublicLaunchTests
     }
 
     [TestMethod]
-    public void ReleaseMetadata_UsesPreviewVersion()
+    public void ReleaseMetadata_UsesStableVersion()
     {
         var version = typeof(FileSystemNode).Assembly
             .GetCustomAttribute<AssemblyInformationalVersionAttribute>()
             ?.InformationalVersion;
 
-        Assert.AreEqual("0.5.0-preview.1", version);
+        Assert.AreEqual("1.0.0", version);
     }
 
     [TestMethod]
@@ -77,8 +77,58 @@ public sealed class PublicLaunchTests
     {
         Assert.AreEqual("None", PrivacyAndSafetyFacts.TelemetryMode);
         Assert.IsFalse(PrivacyAndSafetyFacts.NetworkTelemetryEnabled);
-        StringAssert.Contains(PrivacyAndSafetyFacts.CodexCredentialPolicy, "never reads or stores Codex OAuth tokens");
+        StringAssert.Contains(PrivacyAndSafetyFacts.ExternalIntegrationPolicy, "does not use external");
         CollectionAssert.Contains(PrivacyAndSafetyFacts.BlockedDirectCleanupPaths.ToList(), @"C:\Windows\WinSxS");
+    }
+
+    [TestMethod]
+    public void TrackedProductFiles_DoNotReferenceRemovedExternalAdvisorBranding()
+    {
+        var root = FindRepositoryRoot();
+        var banned = new[]
+        {
+            new string(['C', 'o', 'd', 'e', 'x']),
+            new string(['C', 'h', 'a', 't', 'G', 'P', 'T']),
+            new string(['O', 'p', 'e', 'n', 'A', 'I']),
+            string.Concat("OPEN", "AI", "_API_KEY"),
+            string.Concat("AI", " cleanup")
+        };
+        var ignoredSegments = new[]
+        {
+            $"{Path.DirectorySeparatorChar}.git{Path.DirectorySeparatorChar}",
+            $"{Path.DirectorySeparatorChar}.vs{Path.DirectorySeparatorChar}",
+            $"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}",
+            $"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}",
+            $"{Path.DirectorySeparatorChar}artifacts{Path.DirectorySeparatorChar}"
+        };
+        var files = Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories)
+            .Where(path => ignoredSegments.All(segment => !path.Contains(segment, StringComparison.OrdinalIgnoreCase)))
+            .Where(path => !Path.GetFileName(path).Equals("PublicLaunchTests.cs", StringComparison.OrdinalIgnoreCase))
+            .Where(IsTextLike)
+            .ToList();
+
+        var hits = new List<string>();
+        foreach (var file in files)
+        {
+            var text = File.ReadAllText(file);
+            hits.AddRange(banned
+                .Where(term => text.Contains(term, StringComparison.OrdinalIgnoreCase))
+                .Select(term => $"{Path.GetRelativePath(root, file)} contains removed external advisor wording"));
+        }
+
+        Assert.AreEqual(0, hits.Count, string.Join(Environment.NewLine, hits.Take(20)));
+    }
+
+    [TestMethod]
+    public void VisualLabCards_DoNotUseOldFixedOverflowLayout()
+    {
+        var root = FindRepositoryRoot();
+        var xaml = File.ReadAllText(Path.Combine(root, "src", "DiskSpaceInspector.App", "MainWindow.xaml"));
+
+        Assert.IsFalse(xaml.Contains("Height=\"282\"", StringComparison.OrdinalIgnoreCase));
+        Assert.IsFalse(xaml.Contains("MaxHeight=\"34\"", StringComparison.OrdinalIgnoreCase));
+        StringAssert.Contains(xaml, "MinHeight=\"338\"");
+        StringAssert.Contains(xaml, "Height=\"220\"");
     }
 
     private static ScanResult ScanWithPath(string path)
@@ -160,6 +210,29 @@ public sealed class PublicLaunchTests
             MatchedRule = "DownloadsLargeOld",
             AppOrSource = "User files"
         };
+    }
+
+    private static string FindRepositoryRoot()
+    {
+        var current = new DirectoryInfo(AppContext.BaseDirectory);
+        while (current is not null)
+        {
+            if (File.Exists(Path.Combine(current.FullName, "DiskSpaceInspector.sln")))
+            {
+                return current.FullName;
+            }
+
+            current = current.Parent;
+        }
+
+        Assert.Inconclusive("Repository root was not found from the test output directory.");
+        return AppContext.BaseDirectory;
+    }
+
+    private static bool IsTextLike(string path)
+    {
+        var extension = Path.GetExtension(path).ToLowerInvariant();
+        return extension is ".cs" or ".xaml" or ".md" or ".yml" or ".yaml" or ".ps1" or ".iss" or ".props" or ".csproj" or ".sln" or ".json" or ".gitignore";
     }
 
     private static long GiB(double value)

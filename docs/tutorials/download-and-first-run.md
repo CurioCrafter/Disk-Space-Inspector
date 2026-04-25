@@ -6,4 +6,4 @@
 4. Choose `Open demo workspace` to tour the app without scanning real drives, or choose `Scan this PC` for local results.
 5. Review the `5-minute findings` panel before opening Visual Lab or Cleanup.
 
-The app does not send telemetry. Cleanup remains advisory and staged in this preview.
+The app does not send telemetry or use external advisor services. Cleanup remains advisory and staged in this release.

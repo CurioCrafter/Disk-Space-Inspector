@@ -35,10 +35,10 @@ jobs:
         shell: pwsh
         run: |
           $env:PATH += ";C:\Program Files (x86)\Inno Setup 6"
-          .\scripts\package-release.ps1 -Version 0.5.0-preview.1
+          .\scripts\package-release.ps1 -Version 1.0.0
 
       - name: Upload package artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: disk-space-inspector-preview
+          name: disk-space-inspector-release
           path: artifacts/release/*

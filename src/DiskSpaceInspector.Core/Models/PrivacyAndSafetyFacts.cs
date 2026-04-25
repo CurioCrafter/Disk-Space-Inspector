@@ -6,8 +6,8 @@ public static class PrivacyAndSafetyFacts
 
     public const bool NetworkTelemetryEnabled = false;
 
-    public const string CodexCredentialPolicy =
-        "Disk Space Inspector delegates sign-in to the Codex CLI and never reads or stores Codex OAuth tokens.";
+    public const string ExternalIntegrationPolicy =
+        "Disk Space Inspector does not use external advisor services, cloud telemetry, or credential integrations.";
 
     public static readonly IReadOnlyList<string> BlockedDirectCleanupPaths =
     [

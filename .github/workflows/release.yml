@@ -45,7 +45,7 @@ jobs:
         with:
           name: Disk Space Inspector ${{ github.ref_name }}
           body_path: docs/releases/${{ github.ref_name }}.md
-          prerelease: true
+          prerelease: ${{ contains(github.ref_name, 'preview') || contains(github.ref_name, 'alpha') || contains(github.ref_name, 'beta') || contains(github.ref_name, 'rc') }}
           files: |
             artifacts/release/DiskSpaceInspector-*-win-x64.zip
             artifacts/release/DiskSpaceInspectorSetup-*.exe

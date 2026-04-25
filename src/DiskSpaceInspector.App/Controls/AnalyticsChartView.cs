@@ -47,47 +47,55 @@ public sealed class AnalyticsChartView : FrameworkElement
             return;
         }
 
-        var bounds = new Rect(8, 8, Math.Max(1, ActualWidth - 16), Math.Max(1, ActualHeight - 16));
-        switch (Chart.Kind)
+        var bounds = new Rect(10, 10, Math.Max(1, ActualWidth - 20), Math.Max(1, ActualHeight - 20));
+        drawingContext.PushClip(new RectangleGeometry(bounds));
+        try
         {
-            case VisualChartKind.KpiStrip:
-                DrawKpis(drawingContext, bounds, Chart);
-                break;
-            case VisualChartKind.RankBar:
-            case VisualChartKind.Funnel:
-            case VisualChartKind.Waterfall:
-                DrawRankBars(drawingContext, bounds, Chart);
-                break;
-            case VisualChartKind.StackedBar:
-                DrawStackedBars(drawingContext, bounds, Chart);
-                break;
-            case VisualChartKind.Curve:
-            case VisualChartKind.Timeline:
-                DrawCurve(drawingContext, bounds, Chart);
-                break;
-            case VisualChartKind.Heatmap:
-            case VisualChartKind.Matrix:
-            case VisualChartKind.CalendarHeatmap:
-                DrawHeatmap(drawingContext, bounds, Chart);
-                break;
-            case VisualChartKind.Scatter:
-                DrawScatter(drawingContext, bounds, Chart);
-                break;
-            case VisualChartKind.Radar:
-                DrawRadar(drawingContext, bounds, Chart);
-                break;
-            case VisualChartKind.RelationshipFlow:
-                DrawFlows(drawingContext, bounds, Chart);
-                break;
-            case VisualChartKind.BubblePack:
-                DrawBubbles(drawingContext, bounds, Chart);
-                break;
-            case VisualChartKind.Donut:
-                DrawDonut(drawingContext, bounds, Chart);
-                break;
-            default:
-                DrawRankBars(drawingContext, bounds, Chart);
-                break;
+            switch (Chart.Kind)
+            {
+                case VisualChartKind.KpiStrip:
+                    DrawKpis(drawingContext, bounds, Chart);
+                    break;
+                case VisualChartKind.RankBar:
+                case VisualChartKind.Funnel:
+                case VisualChartKind.Waterfall:
+                    DrawRankBars(drawingContext, bounds, Chart);
+                    break;
+                case VisualChartKind.StackedBar:
+                    DrawStackedBars(drawingContext, bounds, Chart);
+                    break;
+                case VisualChartKind.Curve:
+                case VisualChartKind.Timeline:
+                    DrawCurve(drawingContext, bounds, Chart);
+                    break;
+                case VisualChartKind.Heatmap:
+                case VisualChartKind.Matrix:
+                case VisualChartKind.CalendarHeatmap:
+                    DrawHeatmap(drawingContext, bounds, Chart);
+                    break;
+                case VisualChartKind.Scatter:
+                    DrawScatter(drawingContext, bounds, Chart);
+                    break;
+                case VisualChartKind.Radar:
+                    DrawRadar(drawingContext, bounds, Chart);
+                    break;
+                case VisualChartKind.RelationshipFlow:
+                    DrawFlows(drawingContext, bounds, Chart);
+                    break;
+                case VisualChartKind.BubblePack:
+                    DrawBubbles(drawingContext, bounds, Chart);
+                    break;
+                case VisualChartKind.Donut:
+                    DrawDonut(drawingContext, bounds, Chart);
+                    break;
+                default:
+                    DrawRankBars(drawingContext, bounds, Chart);
+                    break;
+            }
+        }
+        finally
+        {
+            drawingContext.Pop();
         }
     }
 
@@ -112,12 +120,16 @@ public sealed class AnalyticsChartView : FrameworkElement
     private void DrawKpis(DrawingContext dc, Rect bounds, ChartDefinition chart)
     {
         var metrics = chart.Metrics.Take(6).ToList();
-        var columns = Math.Max(1, metrics.Count);
+        var columns = metrics.Count <= 3 ? Math.Max(1, metrics.Count) : 3;
+        var rows = (int)Math.Ceiling(metrics.Count / (double)columns);
         var width = (bounds.Width - (columns - 1) * 8) / columns;
+        var height = (bounds.Height - (rows - 1) * 8) / rows;
         for (var i = 0; i < metrics.Count; i++)
         {
             var metric = metrics[i];
-            var rect = new Rect(bounds.X + i * (width + 8), bounds.Y, width, bounds.Height);
+            var column = i % columns;
+            var row = i / columns;
+            var rect = new Rect(bounds.X + column * (width + 8), bounds.Y + row * (height + 8), width, height);
             DrawRounded(dc, rect, Color.FromRgb(16, 23, 27), Color.FromRgb(43, 55, 61));
             DrawText(dc, metric.Label, rect.X + 10, rect.Y + 10, 11, Palette["Muted"], rect.Width - 20);
             DrawText(dc, metric.Value, rect.X + 10, rect.Y + 34, 20, GetColor(metric.ColorKey), rect.Width - 20, FontWeights.SemiBold);
@@ -127,7 +139,8 @@ public sealed class AnalyticsChartView : FrameworkElement
 
     private void DrawRankBars(DrawingContext dc, Rect bounds, ChartDefinition chart)
     {
-        var points = chart.Points.Take(14).ToList();
+        var maxRows = Math.Clamp((int)(bounds.Height / 20), 4, 14);
+        var points = chart.Points.Take(maxRows).ToList();
         var max = Math.Max(1, points.Max(p => Math.Abs(p.Y)));
         var rowHeight = Math.Max(18, bounds.Height / Math.Max(1, points.Count));
         for (var i = 0; i < points.Count; i++)
@@ -148,8 +161,9 @@ public sealed class AnalyticsChartView : FrameworkElement
 
     private void DrawStackedBars(DrawingContext dc, Rect bounds, ChartDefinition chart)
     {
+        var maxRows = Math.Clamp((int)(bounds.Height / 28), 3, 8);
         var series = chart.Series.Count > 0
-            ? chart.Series.Take(8).ToList()
+            ? chart.Series.Take(maxRows).ToList()
             : [new ChartSeries { Name = chart.Title, Points = chart.Points }];
         var rowHeight = Math.Max(24, bounds.Height / Math.Max(1, series.Count));
         for (var row = 0; row < series.Count; row++)
@@ -211,8 +225,10 @@ public sealed class AnalyticsChartView : FrameworkElement
     private void DrawHeatmap(DrawingContext dc, Rect bounds, ChartDefinition chart)
     {
         var cells = chart.Cells.Take(160).ToList();
-        var rows = cells.Select(c => c.Row).Distinct().Take(14).ToList();
-        var columns = cells.Select(c => c.Column).Distinct().Take(12).ToList();
+        var maxRows = Math.Clamp((int)((bounds.Height - 20) / 14), 4, 14);
+        var maxColumns = Math.Clamp((int)((bounds.Width - 90) / 42), 4, 12);
+        var rows = cells.Select(c => c.Row).Distinct().Take(maxRows).ToList();
+        var columns = cells.Select(c => c.Column).Distinct().Take(maxColumns).ToList();
         var max = Math.Max(1, cells.Max(c => c.Value));
         var labelWidth = Math.Min(98, bounds.Width * 0.25);
         var top = 20d;
@@ -296,7 +312,8 @@ public sealed class AnalyticsChartView : FrameworkElement
 
     private void DrawFlows(DrawingContext dc, Rect bounds, ChartDefinition chart)
     {
-        var flows = chart.Flows.Take(12).ToList();
+        var maxFlows = Math.Clamp((int)(bounds.Height / 20), 4, 12);
+        var flows = chart.Flows.Take(maxFlows).ToList();
         var left = flows.Select(f => f.Source).Distinct().ToList();
         var right = flows.Select(f => f.Target).Distinct().ToList();
         var max = Math.Max(1, flows.Max(f => f.Value));
@@ -345,7 +362,10 @@ public sealed class AnalyticsChartView : FrameworkElement
             var center = new Point(bounds.X + column * cellWidth + cellWidth / 2, bounds.Y + row * cellHeight + cellHeight / 2);
             var radius = Math.Max(10, Math.Min(cellWidth, cellHeight) * (0.18 + 0.32 * Math.Sqrt(Math.Abs(point.Y) / max)));
             dc.DrawEllipse(new SolidColorBrush(GetColor(point.ColorKey)), new Pen(new SolidColorBrush(Color.FromRgb(9, 13, 16)), 1), center, radius, radius);
-            DrawText(dc, point.Label, center.X - radius + 4, center.Y - 6, 10, Readable(GetColor(point.ColorKey)), radius * 2 - 8);
+            if (radius > 20)
+            {
+                DrawText(dc, point.Label, center.X - radius + 4, center.Y - 6, 10, Readable(GetColor(point.ColorKey)), radius * 2 - 8);
+            }
             AddHit(new Rect(center.X - radius, center.Y - radius, radius * 2, radius * 2), point, point.Detail);
         }
     }
@@ -432,7 +452,7 @@ public sealed class AnalyticsChartView : FrameworkElement
             text,
             System.Globalization.CultureInfo.CurrentCulture,
             FlowDirection.LeftToRight,
-            new Typeface(new FontFamily("Segoe UI"), FontStyles.Normal, weight ?? FontWeights.Normal, FontStretches.Normal),
+            new Typeface(new FontFamily("Segoe UI Variable Text, Segoe UI"), FontStyles.Normal, weight ?? FontWeights.Normal, FontStretches.Normal),
             size,
             new SolidColorBrush(color),
             VisualTreeHelper.GetDpi(this).PixelsPerDip)
@@ -450,7 +470,7 @@ public sealed class AnalyticsChartView : FrameworkElement
             value,
             System.Globalization.CultureInfo.CurrentCulture,
             FlowDirection.LeftToRight,
-            new Typeface("Segoe UI"),
+            new Typeface("Segoe UI Variable Text, Segoe UI"),
             size,
             new SolidColorBrush(color),
             VisualTreeHelper.GetDpi(this).PixelsPerDip);

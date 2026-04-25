@@ -3,7 +3,6 @@ using System.Diagnostics;
 using System.IO;
 using System.Windows;
 using DiskSpaceInspector.App.Infrastructure;
-using DiskSpaceInspector.Core.Ai;
 using DiskSpaceInspector.Core.Cleanup;
 using DiskSpaceInspector.Core.Layout;
 using DiskSpaceInspector.Core.Models;
@@ -19,7 +18,11 @@ namespace DiskSpaceInspector.App.ViewModels;
 public sealed class MainViewModel : ObservableObject
 {
     private const int OverviewWorkspaceIndex = 0;
+    private const int VisualizeWorkspaceIndex = 2;
+    private const int VisualLabWorkspaceIndex = 3;
     private const int CleanupWorkspaceIndex = 4;
+    private const int ChangesWorkspaceIndex = 5;
+    private const int InsightsWorkspaceIndex = 6;
     private const int TutorialsWorkspaceIndex = 7;
     private const int SettingsWorkspaceIndex = 8;
 
@@ -31,8 +34,6 @@ public sealed class MainViewModel : ObservableObject
     private readonly IStorageBreakdownService _breakdownService;
     private readonly IStorageAnalyticsService _analyticsService;
     private readonly IScanStore _scanStore;
-    private readonly IAiCleanupAdvisor _aiAdvisor;
-    private readonly ICodexAuthService _codexAuthService;
     private readonly IReportExportService _reportExportService;
     private readonly IFirstRunStateStore _firstRunStateStore;
     private readonly CleanupPlanBuilder _cleanupPlanBuilder = new();
@@ -72,15 +73,11 @@ public sealed class MainViewModel : ObservableObject
     private string _scanQueueText = "";
     private string _accountedBytesText = "0 B";
     private string _usedBytesText = "0 B";
-    private CodexAuthStatus _codexAuthStatus = new();
-    private string _aiStatusText = "Codex AI uses your Codex ChatGPT login. Click Check Codex status or Login with Codex.";
-    private string _aiRecommendationSummary = "No AI recommendations yet.";
+    private string _localAdvisorStatusText = "Local cleanup advisor uses scanner evidence only.";
     private string _visualLabSummary = "Run a scan or open demo mode to generate visual analytics.";
     private string _reportExportStatus = "Diagnostics exports are local and path-redacted by default.";
     private int _selectedWorkspaceIndex;
     private bool _isFirstRunWelcomeVisible = true;
-    private bool _isAiBusy;
-    private AiCleanupRecommendationViewModel? _selectedAiRecommendation;
 
     public MainViewModel()
         : this(
@@ -92,8 +89,6 @@ public sealed class MainViewModel : ObservableObject
             new StorageBreakdownService(),
             new StorageAnalyticsService(),
             new SqliteScanStore(DefaultDatabasePath()),
-            new CodexCliCleanupAdvisor(),
-            new CodexAuthService(),
             new ReportExportService(),
             new JsonFirstRunStateStore(DefaultFirstRunStatePath()),
             DefaultDatabasePath(),
@@ -111,8 +106,6 @@ public sealed class MainViewModel : ObservableObject
         IStorageBreakdownService breakdownService,
         IStorageAnalyticsService analyticsService,
         IScanStore scanStore,
-        IAiCleanupAdvisor? aiAdvisor = null,
-        ICodexAuthService? codexAuthService = null,
         IReportExportService? reportExportService = null,
         IFirstRunStateStore? firstRunStateStore = null,
         string? databasePath = null,
@@ -127,8 +120,6 @@ public sealed class MainViewModel : ObservableObject
         _breakdownService = breakdownService;
         _analyticsService = analyticsService;
         _scanStore = scanStore;
-        _aiAdvisor = aiAdvisor ?? new CodexCliCleanupAdvisor();
-        _codexAuthService = codexAuthService ?? new CodexAuthService();
         _reportExportService = reportExportService ?? new ReportExportService();
         _firstRunStateStore = firstRunStateStore ?? new JsonFirstRunStateStore(DefaultFirstRunStatePath());
         _databasePath = databasePath ?? DefaultDatabasePath();
@@ -164,10 +155,6 @@ public sealed class MainViewModel : ObservableObject
         }, _ => SelectedRow is not null);
         OpenSelectedCommand = new RelayCommand(_ => OpenSelectedPath(), _ => !string.IsNullOrWhiteSpace(SelectedPath));
         StageFindingCommand = new RelayCommand(_ => StageSelectedFinding(), _ => SelectedFinding is not null);
-        LoginWithCodexCommand = new AsyncRelayCommand(LoginWithCodexAsync, () => !IsAiBusy);
-        CheckCodexStatusCommand = new AsyncRelayCommand(CheckCodexStatusAsync, () => !IsAiBusy);
-        AskAiCleanupAdvisorCommand = new AsyncRelayCommand(AskAiCleanupAdvisorAsync, CanAskAiCleanupAdvisor);
-        StageAiRecommendationCommand = new RelayCommand(_ => StageSelectedAiRecommendation(), _ => SelectedAiRecommendation is not null);
         VisualChartSelectedCommand = new RelayCommand(HandleVisualChartSelection);
         LoadDemoCommand = new RelayCommand(_ => LoadDemoData());
         ShowCleanupSafetyCommand = new RelayCommand(_ => ShowCleanupSafetyGuide());
@@ -218,8 +205,6 @@ public sealed class MainViewModel : ObservableObject
 
     public ObservableCollection<InsightFindingViewModel> Insights { get; } = [];
 
-    public ObservableCollection<AiCleanupRecommendationViewModel> AiRecommendations { get; } = [];
-
     public ObservableCollection<ChartDefinitionViewModel> VisualLabCharts { get; } = [];
 
     public ObservableCollection<ChartDefinitionViewModel> VisualLabAdvancedCharts { get; } = [];
@@ -253,14 +238,6 @@ public sealed class MainViewModel : ObservableObject
     public RelayCommand OpenSelectedCommand { get; }
 
     public RelayCommand StageFindingCommand { get; }
-
-    public AsyncRelayCommand LoginWithCodexCommand { get; }
-
-    public AsyncRelayCommand CheckCodexStatusCommand { get; }
-
-    public AsyncRelayCommand AskAiCleanupAdvisorCommand { get; }
-
-    public RelayCommand StageAiRecommendationCommand { get; }
 
     public RelayCommand VisualChartSelectedCommand { get; }
 
@@ -328,7 +305,6 @@ public sealed class MainViewModel : ObservableObject
                 PauseScanCommand.RaiseCanExecuteChanged();
                 ResumeScanCommand.RaiseCanExecuteChanged();
                 LoadLatestCommand.RaiseCanExecuteChanged();
-                AskAiCleanupAdvisorCommand.RaiseCanExecuteChanged();
                 ExportDiagnosticsCommand.RaiseCanExecuteChanged();
             }
         }
@@ -479,16 +455,10 @@ public sealed class MainViewModel : ObservableObject
         private set => SetProperty(ref _usedBytesText, value);
     }
 
-    public string AiStatusText
+    public string LocalAdvisorStatusText
     {
-        get => _aiStatusText;
-        private set => SetProperty(ref _aiStatusText, value);
-    }
-
-    public string AiRecommendationSummary
-    {
-        get => _aiRecommendationSummary;
-        private set => SetProperty(ref _aiRecommendationSummary, value);
+        get => _localAdvisorStatusText;
+        private set => SetProperty(ref _localAdvisorStatusText, value);
     }
 
     public string VisualLabSummary
@@ -509,7 +479,7 @@ public sealed class MainViewModel : ObservableObject
 
     public string TelemetryStatus => $"{PrivacyAndSafetyFacts.TelemetryMode} telemetry. No background usage or crash reporting is sent.";
 
-    public string CodexCredentialPolicy => PrivacyAndSafetyFacts.CodexCredentialPolicy;
+    public string ExternalIntegrationPolicy => PrivacyAndSafetyFacts.ExternalIntegrationPolicy;
 
     public string BlockedDirectCleanupPaths => string.Join("; ", PrivacyAndSafetyFacts.BlockedDirectCleanupPaths);
 
@@ -523,32 +493,6 @@ public sealed class MainViewModel : ObservableObject
     {
         get => _isFirstRunWelcomeVisible;
         private set => SetProperty(ref _isFirstRunWelcomeVisible, value);
-    }
-
-    public bool IsAiBusy
-    {
-        get => _isAiBusy;
-        private set
-        {
-            if (SetProperty(ref _isAiBusy, value))
-            {
-                LoginWithCodexCommand.RaiseCanExecuteChanged();
-                CheckCodexStatusCommand.RaiseCanExecuteChanged();
-                AskAiCleanupAdvisorCommand.RaiseCanExecuteChanged();
-            }
-        }
-    }
-
-    public AiCleanupRecommendationViewModel? SelectedAiRecommendation
-    {
-        get => _selectedAiRecommendation;
-        set
-        {
-            if (SetProperty(ref _selectedAiRecommendation, value))
-            {
-                StageAiRecommendationCommand.RaiseCanExecuteChanged();
-            }
-        }
     }
 
     public void NavigateToNode(long nodeId)
@@ -611,15 +555,7 @@ public sealed class MainViewModel : ObservableObject
         SelectedVolume = Volumes.FirstOrDefault();
         LoadScan(demo.Scan, demo.CleanupFindings, demo.Relationships, demo.Changes, demo.Insights);
 
-        AiRecommendations.Clear();
-        foreach (var recommendation in demo.AiRecommendations)
-        {
-            AiRecommendations.Add(new AiCleanupRecommendationViewModel(recommendation));
-        }
-
-        SelectedAiRecommendation = AiRecommendations.FirstOrDefault();
-        AiRecommendationSummary = $"{AiRecommendations.Count:n0} demo AI recommendations. Safety remains constrained by app guardrails.";
-        AiStatusText = "Demo mode: Codex recommendations are seeded sample data.";
+        LocalAdvisorStatusText = "Demo mode: local cleanup advisor is populated from deterministic sample findings.";
         StatusText = "Demo scan loaded with realistic sample storage data.";
         ScanProgressValue = 0.923;
         ScanProgressText = "92.3% accounted";
@@ -650,10 +586,14 @@ public sealed class MainViewModel : ObservableObject
 
             return arg["--view=".Length..].Trim().ToLowerInvariant() switch
             {
+                "overview" => OverviewWorkspaceIndex,
+                "visualize" or "visualizer" => VisualizeWorkspaceIndex,
+                "visual-lab" or "lab" => VisualLabWorkspaceIndex,
                 "cleanup" => CleanupWorkspaceIndex,
+                "changes" => ChangesWorkspaceIndex,
+                "insights" => InsightsWorkspaceIndex,
                 "tutorials" or "guide" => TutorialsWorkspaceIndex,
                 "settings" or "privacy" or "safety" => SettingsWorkspaceIndex,
-                "visual-lab" or "lab" => 3,
                 _ => OverviewWorkspaceIndex
             };
         }
@@ -712,9 +652,9 @@ public sealed class MainViewModel : ObservableObject
             RedactLocalDisplayPath(_databasePath),
             "Scan snapshots stay in your local app data folder unless you export a report."));
         PrivacyFacts.Add(new PrivacyFactViewModel(
-            "Codex credentials",
-            "CLI-owned",
-            PrivacyAndSafetyFacts.CodexCredentialPolicy));
+            "External integrations",
+            "None",
+            PrivacyAndSafetyFacts.ExternalIntegrationPolicy));
         PrivacyFacts.Add(new PrivacyFactViewModel(
             "Cleanup execution",
             "Advisory only",
@@ -977,10 +917,9 @@ public sealed class MainViewModel : ObservableObject
             Insights.Add(new InsightFindingViewModel(insight));
         }
 
-        AiRecommendations.Clear();
-        SelectedAiRecommendation = null;
-        AiRecommendationSummary = "No AI recommendations yet.";
-        AskAiCleanupAdvisorCommand.RaiseCanExecuteChanged();
+        LocalAdvisorStatusText = _findingsByNode.Count == 0
+            ? "Local cleanup advisor is waiting for scan evidence."
+            : $"{_findingsByNode.Count:n0} evidence-backed cleanup findings loaded.";
         ExportDiagnosticsCommand.RaiseCanExecuteChanged();
 
         EvidenceRelationships.Clear();
@@ -1303,11 +1242,16 @@ public sealed class MainViewModel : ObservableObject
             result.Issues.Count == 0 ? "No inaccessible paths recorded." : "Permission gaps are tracked instead of hidden.",
             result.Issues.Count == 0 ? "OK" : "Warning"));
 
+        var localActionableCount = findings.Count(f => f.Safety is CleanupSafety.Safe or CleanupSafety.Review);
         FiveMinuteFindings.Add(new QuickFindingViewModel(
-            "AI cleanup",
-            _codexAuthStatus.CanUseChatGpt ? "Ready" : "Optional",
-            _codexAuthStatus.CanUseChatGpt ? "Ask Codex AI can rank loaded candidates." : "Use Codex login when you want a second opinion.",
-            "AI"));
+            "Local advisor",
+            $"{localActionableCount:n0} candidates",
+            localActionableCount == 0 ? "Run a scan to populate evidence-backed cleanup lanes." : "Recommendations are generated locally from scan evidence and safety rules.",
+            "Local"));
+
+        LocalAdvisorStatusText = localActionableCount == 0
+            ? "Local cleanup advisor is waiting for scan evidence."
+            : $"{localActionableCount:n0} local cleanup candidates found. Blocked/system items stay guarded.";
     }
 
     private void ShowCleanupSafetyGuide()
@@ -1492,166 +1436,6 @@ public sealed class MainViewModel : ObservableObject
         StatusText = plan.Findings.Count == 0
             ? "This item is not eligible for direct cleanup. Use the recommended app or system route."
             : $"Staged {SelectedFinding.DisplayName} for review. No files are deleted from this version.";
-    }
-
-    private async Task LoginWithCodexAsync()
-    {
-        IsAiBusy = true;
-        AiStatusText = "Opening Codex login. Complete the ChatGPT sign-in flow in the external window.";
-        try
-        {
-            await _codexAuthService.StartLoginAsync().ConfigureAwait(true);
-            await PollCodexStatusAfterLoginAsync().ConfigureAwait(true);
-        }
-        catch (Exception ex)
-        {
-            AiStatusText = $"Could not start Codex login: {ex.Message}";
-        }
-        finally
-        {
-            IsAiBusy = false;
-        }
-    }
-
-    private async Task PollCodexStatusAfterLoginAsync()
-    {
-        for (var attempt = 0; attempt < 40; attempt++)
-        {
-            await Task.Delay(TimeSpan.FromSeconds(3)).ConfigureAwait(true);
-            var status = await _codexAuthService.GetStatusAsync().ConfigureAwait(true);
-            ApplyCodexStatus(status);
-            if (status.Kind == CodexAuthKind.ChatGpt)
-            {
-                return;
-            }
-        }
-
-        AiStatusText = "Codex login window opened. Click Check Codex status after finishing login.";
-    }
-
-    private async Task CheckCodexStatusAsync()
-    {
-        IsAiBusy = true;
-        AiStatusText = "Checking Codex login status.";
-        try
-        {
-            ApplyCodexStatus(await _codexAuthService.GetStatusAsync().ConfigureAwait(true));
-        }
-        finally
-        {
-            IsAiBusy = false;
-        }
-    }
-
-    private bool CanAskAiCleanupAdvisor()
-    {
-        return !IsScanning &&
-               !IsAiBusy &&
-               _currentScan is not null &&
-               _findingsByNode.Count > 0 &&
-               _codexAuthStatus.CanUseChatGpt;
-    }
-
-    private async Task AskAiCleanupAdvisorAsync()
-    {
-        if (_currentScan is null)
-        {
-            AiStatusText = "Load or run a scan before asking AI for cleanup recommendations.";
-            return;
-        }
-
-        var codexStatus = await _codexAuthService.GetStatusAsync().ConfigureAwait(true);
-        ApplyCodexStatus(codexStatus);
-        if (!codexStatus.CanUseChatGpt)
-        {
-            AiStatusText = $"{codexStatus.DisplayText} Use Login with Codex, then try Ask Codex AI again.";
-            return;
-        }
-
-        var findings = _findingsByNode.Values
-            .OrderBy(f => f.Safety)
-            .ThenByDescending(f => f.SizeBytes)
-            .Take(120)
-            .ToList();
-
-        if (findings.Count == 0)
-        {
-            AiStatusText = "No cleanup findings are available for AI to rank.";
-            return;
-        }
-
-        IsAiBusy = true;
-        AiStatusText = "Asking AI to rank cleanup candidates.";
-        AiRecommendationSummary = "AI analysis running.";
-
-        try
-        {
-            var request = new AiCleanupAdvisorRequest
-            {
-                ScanId = _currentScan.Session.Id,
-                CleanupFindings = findings,
-                Insights = Insights.Select(i => i.Model).ToList(),
-                Relationships = _currentRelationships
-            };
-            var options = new AiCleanupAdvisorOptions
-            {
-                Model = "Codex",
-                MaxCandidateCount = 80,
-                MaxRecommendations = 25
-            };
-
-            var recommendations = await _aiAdvisor.RecommendAsync(request, options).ConfigureAwait(true);
-            AiRecommendations.Clear();
-            foreach (var recommendation in recommendations)
-            {
-                AiRecommendations.Add(new AiCleanupRecommendationViewModel(recommendation));
-            }
-
-            AiRecommendationSummary = recommendations.Count == 0
-                ? "AI did not return any recommendations from the provided candidates."
-                : $"{recommendations.Count:n0} AI recommendations. {recommendations.Count(r => r.CanStage):n0} can be staged for review.";
-            AiStatusText = "AI recommendations loaded. Safety is still constrained by Disk Space Inspector rules.";
-        }
-        catch (Exception ex)
-        {
-            AiStatusText = $"AI request failed: {ex.Message}";
-            AiRecommendationSummary = "AI recommendations unavailable.";
-        }
-        finally
-        {
-            IsAiBusy = false;
-        }
-    }
-
-    private void ApplyCodexStatus(CodexAuthStatus status)
-    {
-        _codexAuthStatus = status;
-        AiStatusText = status.Detail.Length > 0
-            ? $"{status.DisplayText} {status.Detail}"
-            : status.DisplayText;
-        AskAiCleanupAdvisorCommand.RaiseCanExecuteChanged();
-    }
-
-    private void StageSelectedAiRecommendation()
-    {
-        if (SelectedAiRecommendation is null)
-        {
-            return;
-        }
-
-        var recommendation = SelectedAiRecommendation.Model;
-        var finding = _findingsByNode.Values.FirstOrDefault(f => f.Id == recommendation.SourceFindingId);
-        if (finding is null)
-        {
-            StatusText = "The AI recommendation no longer matches a loaded cleanup finding.";
-            return;
-        }
-
-        var plan = _cleanupPlanBuilder.Build([finding]);
-        PlannedCleanupSize = ByteFormatter.Format(plan.EstimatedReclaimableBytes);
-        StatusText = recommendation.CanStage && plan.Findings.Count > 0
-            ? $"Staged AI recommendation for {recommendation.DisplayName}. No files are deleted from this version."
-            : "AI recommendation is advisory only for this item. Use the listed system/app route or leave it alone.";
     }
 
     private static ScanResult MergeResults(IReadOnlyList<ScanResult> results)

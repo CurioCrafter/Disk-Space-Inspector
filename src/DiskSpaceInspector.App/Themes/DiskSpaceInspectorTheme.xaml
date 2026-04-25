@@ -2,6 +2,7 @@
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                     xmlns:vm="clr-namespace:DiskSpaceInspector.App.ViewModels">
     <BooleanToVisibilityConverter x:Key="BoolToVisibility"/>
+    <FontFamily x:Key="AppFontFamily">Segoe UI Variable Text, Segoe UI</FontFamily>
 
     <Color x:Key="BgAppColor">#090D10</Color>
     <Color x:Key="BgRailColor">#0E1418</Color>
@@ -49,6 +50,13 @@
     <SolidColorBrush x:Key="{x:Static SystemColors.MenuBrushKey}" Color="{StaticResource SurfaceColor}"/>
     <SolidColorBrush x:Key="{x:Static SystemColors.MenuTextBrushKey}" Color="{StaticResource TextPrimaryColor}"/>
 
+    <Style TargetType="{x:Type TextBlock}">
+        <Setter Property="FontFamily" Value="{StaticResource AppFontFamily}"/>
+        <Setter Property="FontSize" Value="12.5"/>
+        <Setter Property="LineStackingStrategy" Value="BlockLineHeight"/>
+        <Setter Property="LineHeight" Value="16"/>
+    </Style>
+
     <Style x:Key="Panel" TargetType="{x:Type Border}">
         <Setter Property="Background" Value="{StaticResource PanelBrush}"/>
         <Setter Property="BorderBrush" Value="{StaticResource LineBrush}"/>
@@ -59,7 +67,8 @@
     </Style>
 
     <Style x:Key="SectionTitle" TargetType="{x:Type TextBlock}">
-        <Setter Property="FontSize" Value="16"/>
+        <Setter Property="FontFamily" Value="{StaticResource AppFontFamily}"/>
+        <Setter Property="FontSize" Value="15"/>
         <Setter Property="FontWeight" Value="SemiBold"/>
         <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
     </Style>
@@ -70,6 +79,8 @@
     </Style>
 
     <Style TargetType="{x:Type Button}">
+        <Setter Property="FontFamily" Value="{StaticResource AppFontFamily}"/>
+        <Setter Property="FontSize" Value="12.5"/>
         <Setter Property="Background" Value="{StaticResource SurfaceHoverBrush}"/>
         <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
         <Setter Property="BorderBrush" Value="{StaticResource LineStrongBrush}"/>
@@ -115,6 +126,8 @@
     </Style>
 
     <Style TargetType="{x:Type TextBox}">
+        <Setter Property="FontFamily" Value="{StaticResource AppFontFamily}"/>
+        <Setter Property="FontSize" Value="12.5"/>
         <Setter Property="Background" Value="{StaticResource SurfaceLowBrush}"/>
         <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
         <Setter Property="CaretBrush" Value="{StaticResource AccentBrush}"/>
@@ -154,6 +167,8 @@
     </Style>
 
     <Style TargetType="{x:Type ComboBox}">
+        <Setter Property="FontFamily" Value="{StaticResource AppFontFamily}"/>
+        <Setter Property="FontSize" Value="12.5"/>
         <Setter Property="Background" Value="{StaticResource SurfaceLowBrush}"/>
         <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
         <Setter Property="BorderBrush" Value="{StaticResource LineStrongBrush}"/>
@@ -235,6 +250,8 @@
     </Style>
 
     <Style TargetType="{x:Type ComboBoxItem}">
+        <Setter Property="FontFamily" Value="{StaticResource AppFontFamily}"/>
+        <Setter Property="FontSize" Value="12.5"/>
         <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
         <Setter Property="Background" Value="Transparent"/>
         <Setter Property="Padding" Value="10,7"/>
@@ -350,11 +367,12 @@
     </Style>
 
     <Style TargetType="{x:Type TabItem}">
+        <Setter Property="FontFamily" Value="{StaticResource AppFontFamily}"/>
         <Setter Property="Background" Value="Transparent"/>
         <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
         <Setter Property="Padding" Value="16,12"/>
         <Setter Property="Margin" Value="0,2,0,2"/>
-        <Setter Property="FontSize" Value="14"/>
+        <Setter Property="FontSize" Value="13"/>
         <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
         <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
         <Setter Property="Template">
@@ -550,6 +568,8 @@
     </Style>
 
     <Style TargetType="{x:Type DataGrid}">
+        <Setter Property="FontFamily" Value="{StaticResource AppFontFamily}"/>
+        <Setter Property="FontSize" Value="12"/>
         <Setter Property="Background" Value="{StaticResource PanelBrush}"/>
         <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
         <Setter Property="BorderBrush" Value="{StaticResource LineBrush}"/>
@@ -571,12 +591,14 @@
     </Style>
 
     <Style TargetType="{x:Type DataGridColumnHeader}">
+        <Setter Property="FontFamily" Value="{StaticResource AppFontFamily}"/>
+        <Setter Property="FontSize" Value="11.5"/>
         <Setter Property="Background" Value="{StaticResource SurfaceRaisedBrush}"/>
         <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
         <Setter Property="BorderBrush" Value="{StaticResource LineBrush}"/>
         <Setter Property="BorderThickness" Value="0,0,1,1"/>
         <Setter Property="Padding" Value="8,7"/>
-        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="FontWeight" Value="Medium"/>
         <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
         <Setter Property="Template">
             <Setter.Value>
