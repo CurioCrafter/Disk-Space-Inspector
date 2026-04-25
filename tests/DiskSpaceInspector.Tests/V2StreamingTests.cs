@@ -18,8 +18,7 @@ public sealed class V2StreamingTests
 
         var scanner = new FileSystemScanner(new WindowsRelationshipResolver());
         var batches = new List<ScanBatch>();
-        var progressReports = new List<ScanProgress>();
-        var progress = new Progress<ScanProgress>(progressReports.Add);
+        var progress = new CapturingProgress();
 
         var completed = await scanner.StartScanAsync(
             Request(fixture.Path, totalBytes: 1000, freeBytes: 400),
@@ -33,8 +32,8 @@ public sealed class V2StreamingTests
         Assert.AreEqual(ScanStatus.Completed, completed.Session.Status);
         Assert.IsTrue(batches.Count > 0);
         Assert.IsTrue(batches.SelectMany(b => b.Nodes).Any(n => n.Name == "a.bin"));
-        Assert.IsTrue(progressReports.Any(p => p.UsedBytes == 600));
-        Assert.IsTrue(progressReports.Any(p => p.ProgressFraction > 0));
+        Assert.IsTrue(progress.Reports.Any(p => p.UsedBytes == 600));
+        Assert.IsTrue(progress.Reports.Any(p => p.ProgressFraction > 0));
     }
 
     [TestMethod]
@@ -242,5 +241,15 @@ public sealed class V2StreamingTests
             LastModifiedUtc = DateTimeOffset.UtcNow,
             Category = "Temporary"
         };
+    }
+
+    private sealed class CapturingProgress : IProgress<ScanProgress>
+    {
+        public List<ScanProgress> Reports { get; } = [];
+
+        public void Report(ScanProgress value)
+        {
+            Reports.Add(value);
+        }
     }
 }
