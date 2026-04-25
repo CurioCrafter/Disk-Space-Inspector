@@ -18,6 +18,7 @@ namespace DiskSpaceInspector.App.ViewModels;
 public sealed class MainViewModel : ObservableObject
 {
     private const int OverviewWorkspaceIndex = 0;
+    private const int FilesWorkspaceIndex = 1;
     private const int VisualizeWorkspaceIndex = 2;
     private const int VisualLabWorkspaceIndex = 3;
     private const int CleanupWorkspaceIndex = 4;
@@ -36,6 +37,8 @@ public sealed class MainViewModel : ObservableObject
     private readonly IScanStore _scanStore;
     private readonly IReportExportService _reportExportService;
     private readonly IFirstRunStateStore _firstRunStateStore;
+    private readonly IAppSettingsStore _appSettingsStore;
+    private readonly ICleanupReviewQueueService _cleanupReviewQueueService;
     private readonly CleanupPlanBuilder _cleanupPlanBuilder = new();
     private readonly string _databasePath;
     private readonly string _reportsDirectory;
@@ -50,6 +53,9 @@ public sealed class MainViewModel : ObservableObject
     private VolumeViewModel? _selectedVolume;
     private NodeRowViewModel? _selectedRow;
     private CleanupFindingViewModel? _selectedFinding;
+    private CleanupReviewItemViewModel? _selectedCleanupReviewItem;
+    private AppSettings _settings;
+    private CleanupReviewQueue _cleanupReviewQueue = new();
     private long? _currentNodeId;
     private string _statusText = "Select a drive to scan.";
     private string _scanDetail = "";
@@ -76,6 +82,8 @@ public sealed class MainViewModel : ObservableObject
     private string _localAdvisorStatusText = "Local cleanup advisor uses scanner evidence only.";
     private string _visualLabSummary = "Run a scan or open demo mode to generate visual analytics.";
     private string _reportExportStatus = "Diagnostics exports are local and path-redacted by default.";
+    private string _cleanupReviewSummary = "Stage safe or review-only findings here before taking action outside the app.";
+    private string _whatChangedSummary = "Run a scan twice to compare what changed.";
     private int _selectedWorkspaceIndex;
     private bool _isFirstRunWelcomeVisible = true;
 
@@ -91,9 +99,12 @@ public sealed class MainViewModel : ObservableObject
             new SqliteScanStore(DefaultDatabasePath()),
             new ReportExportService(),
             new JsonFirstRunStateStore(DefaultFirstRunStatePath()),
+            new JsonAppSettingsStore(DefaultAppSettingsPath()),
+            new CleanupReviewQueueService(),
             DefaultDatabasePath(),
             DefaultReportsDirectory(),
-            IsDemoMode())
+            IsDemoMode(),
+            IsFirstRunPreviewMode())
     {
     }
 
@@ -108,9 +119,12 @@ public sealed class MainViewModel : ObservableObject
         IScanStore scanStore,
         IReportExportService? reportExportService = null,
         IFirstRunStateStore? firstRunStateStore = null,
+        IAppSettingsStore? appSettingsStore = null,
+        ICleanupReviewQueueService? cleanupReviewQueueService = null,
         string? databasePath = null,
         string? reportsDirectory = null,
-        bool demoMode = false)
+        bool demoMode = false,
+        bool firstRunPreviewMode = false)
     {
         _driveDiscovery = driveDiscovery;
         _scanner = scanner;
@@ -122,8 +136,12 @@ public sealed class MainViewModel : ObservableObject
         _scanStore = scanStore;
         _reportExportService = reportExportService ?? new ReportExportService();
         _firstRunStateStore = firstRunStateStore ?? new JsonFirstRunStateStore(DefaultFirstRunStatePath());
+        _appSettingsStore = appSettingsStore ?? new JsonAppSettingsStore(DefaultAppSettingsPath());
+        _cleanupReviewQueueService = cleanupReviewQueueService ?? new CleanupReviewQueueService();
         _databasePath = databasePath ?? DefaultDatabasePath();
         _reportsDirectory = reportsDirectory ?? DefaultReportsDirectory();
+        _settings = LoadSettings();
+        _minimumSizeMegabytes = _settings.Charts.MinimumNodeSizeMegabytes;
 
         RefreshDrivesCommand = new AsyncRelayCommand(() => RefreshDrivesAsync(force: true), () => !IsScanning);
         ScanSelectedCommand = new AsyncRelayCommand(ScanSelectedAsync, () => SelectedVolume?.Model.IsReady == true && !IsScanning);
@@ -160,18 +178,41 @@ public sealed class MainViewModel : ObservableObject
         ShowCleanupSafetyCommand = new RelayCommand(_ => ShowCleanupSafetyGuide());
         OpenPrivacyCenterCommand = new RelayCommand(_ => SelectedWorkspaceIndex = SettingsWorkspaceIndex);
         ExportDiagnosticsCommand = new AsyncRelayCommand(ExportDiagnosticsAsync, () => _currentScan is not null && !IsScanning);
+        RunConsumerToolCommand = new RelayCommand(RunConsumerTool);
+        RemoveStagedCleanupCommand = new RelayCommand(_ => RemoveSelectedCleanupReviewItem(), _ => SelectedCleanupReviewItem is not null);
+        ClearCleanupQueueCommand = new RelayCommand(_ => ClearCleanupReviewQueue(), _ => CleanupReviewItems.Count > 0);
+        ExportCleanupReviewCommand = new AsyncRelayCommand(ExportCleanupReviewAsync, () => CleanupReviewItems.Count > 0);
+        OpenStorageSettingsCommand = new RelayCommand(_ => OpenShellTarget("ms-settings:storagesense"));
+        OpenInstalledAppsCommand = new RelayCommand(_ => OpenShellTarget("ms-settings:appsfeatures"));
+        OpenDiskCleanupCommand = new RelayCommand(_ => OpenShellTarget("cleanmgr.exe"));
+        OpenDataFolderCommand = new RelayCommand(_ =>
+        {
+            Directory.CreateDirectory(DefaultAppDataDirectory());
+            OpenShellTarget(DefaultAppDataDirectory());
+        });
+        ResetWelcomeCommand = new RelayCommand(_ => ResetWelcomeState());
+        ClearLocalDatabaseCommand = new RelayCommand(_ => ClearLocalDatabase(), _ => !IsScanning);
 
         BuildPrivacyFacts();
         _ = MarkAppOpenedAsync();
 
-        if (demoMode)
+        if (firstRunPreviewMode)
+        {
+            IsFirstRunWelcomeVisible = true;
+            StatusText = "Welcome preview.";
+        }
+        else if (demoMode || _settings.Launch.OpenDemoWorkspaceOnStartup)
         {
             LoadDemoData();
         }
         else
         {
-            IsFirstRunWelcomeVisible = true;
+            IsFirstRunWelcomeVisible = _settings.Launch.ShowWelcomeWhenNoScan;
             _ = RefreshDrivesAsync(force: false);
+            if (_settings.Launch.LoadLatestScanOnStartup)
+            {
+                _ = LoadLatestAsync();
+            }
         }
 
         SelectedWorkspaceIndex = InitialWorkspaceIndex();
@@ -197,6 +238,8 @@ public sealed class MainViewModel : ObservableObject
 
     public ObservableCollection<CleanupFindingViewModel> CleanupFindings { get; } = [];
 
+    public ObservableCollection<CleanupReviewItemViewModel> CleanupReviewItems { get; } = [];
+
     public ObservableCollection<ConnectionViewModel> Connections { get; } = [];
 
     public ObservableCollection<StorageRelationshipViewModel> EvidenceRelationships { get; } = [];
@@ -212,6 +255,8 @@ public sealed class MainViewModel : ObservableObject
     public ObservableCollection<TutorialStepViewModel> TutorialSteps { get; } = [];
 
     public ObservableCollection<QuickFindingViewModel> FiveMinuteFindings { get; } = [];
+
+    public ObservableCollection<ConsumerStorageToolViewModel> ConsumerTools { get; } = [];
 
     public ObservableCollection<PrivacyFactViewModel> PrivacyFacts { get; } = [];
 
@@ -248,6 +293,26 @@ public sealed class MainViewModel : ObservableObject
     public RelayCommand OpenPrivacyCenterCommand { get; }
 
     public AsyncRelayCommand ExportDiagnosticsCommand { get; }
+
+    public RelayCommand RunConsumerToolCommand { get; }
+
+    public RelayCommand RemoveStagedCleanupCommand { get; }
+
+    public RelayCommand ClearCleanupQueueCommand { get; }
+
+    public AsyncRelayCommand ExportCleanupReviewCommand { get; }
+
+    public RelayCommand OpenStorageSettingsCommand { get; }
+
+    public RelayCommand OpenInstalledAppsCommand { get; }
+
+    public RelayCommand OpenDiskCleanupCommand { get; }
+
+    public RelayCommand OpenDataFolderCommand { get; }
+
+    public RelayCommand ResetWelcomeCommand { get; }
+
+    public RelayCommand ClearLocalDatabaseCommand { get; }
 
     public VolumeViewModel? SelectedVolume
     {
@@ -291,6 +356,18 @@ public sealed class MainViewModel : ObservableObject
         }
     }
 
+    public CleanupReviewItemViewModel? SelectedCleanupReviewItem
+    {
+        get => _selectedCleanupReviewItem;
+        set
+        {
+            if (SetProperty(ref _selectedCleanupReviewItem, value))
+            {
+                RemoveStagedCleanupCommand.RaiseCanExecuteChanged();
+            }
+        }
+    }
+
     public bool IsScanning
     {
         get => _isScanning;
@@ -306,6 +383,7 @@ public sealed class MainViewModel : ObservableObject
                 ResumeScanCommand.RaiseCanExecuteChanged();
                 LoadLatestCommand.RaiseCanExecuteChanged();
                 ExportDiagnosticsCommand.RaiseCanExecuteChanged();
+                ClearLocalDatabaseCommand.RaiseCanExecuteChanged();
             }
         }
     }
@@ -354,6 +432,8 @@ public sealed class MainViewModel : ObservableObject
         {
             if (SetProperty(ref _minimumSizeMegabytes, value))
             {
+                _settings.Charts.MinimumNodeSizeMegabytes = Math.Max(0, value);
+                PersistSettings();
                 RefreshExplorerRows();
             }
         }
@@ -473,15 +553,198 @@ public sealed class MainViewModel : ObservableObject
         private set => SetProperty(ref _reportExportStatus, value);
     }
 
+    public string CleanupReviewSummary
+    {
+        get => _cleanupReviewSummary;
+        private set => SetProperty(ref _cleanupReviewSummary, value);
+    }
+
+    public string WhatChangedSummary
+    {
+        get => _whatChangedSummary;
+        private set => SetProperty(ref _whatChangedSummary, value);
+    }
+
     public string DatabasePath => RedactLocalDisplayPath(_databasePath);
 
     public string ReportsDirectory => RedactLocalDisplayPath(_reportsDirectory);
+
+    public string AppVersion => typeof(FileSystemNode).Assembly
+        .GetName()
+        .Version?
+        .ToString(3) ?? "1.1.0";
+
+    public string OwnerName => "Andrew Rainsberger";
+
+    public string UseRiskNotice => "Use at your own risk. This app scans local storage and explains cleanup candidates, but you are responsible for reviewing paths and backing up important files before acting.";
 
     public string TelemetryStatus => $"{PrivacyAndSafetyFacts.TelemetryMode} telemetry. No background usage or crash reporting is sent.";
 
     public string ExternalIntegrationPolicy => PrivacyAndSafetyFacts.ExternalIntegrationPolicy;
 
     public string BlockedDirectCleanupPaths => string.Join("; ", PrivacyAndSafetyFacts.BlockedDirectCleanupPaths);
+
+    public IReadOnlyList<string> ChartDensityOptions { get; } = ["Compact", "Comfortable", "Spacious"];
+
+    public bool LoadLatestScanOnStartup
+    {
+        get => _settings.Launch.LoadLatestScanOnStartup;
+        set
+        {
+            if (_settings.Launch.LoadLatestScanOnStartup != value)
+            {
+                _settings.Launch.LoadLatestScanOnStartup = value;
+                OnPropertyChanged();
+                PersistSettings();
+            }
+        }
+    }
+
+    public bool ShowWelcomeWhenNoScan
+    {
+        get => _settings.Launch.ShowWelcomeWhenNoScan;
+        set
+        {
+            if (_settings.Launch.ShowWelcomeWhenNoScan != value)
+            {
+                _settings.Launch.ShowWelcomeWhenNoScan = value;
+                OnPropertyChanged();
+                PersistSettings();
+            }
+        }
+    }
+
+    public bool OpenDemoWorkspaceOnStartup
+    {
+        get => _settings.Launch.OpenDemoWorkspaceOnStartup;
+        set
+        {
+            if (_settings.Launch.OpenDemoWorkspaceOnStartup != value)
+            {
+                _settings.Launch.OpenDemoWorkspaceOnStartup = value;
+                OnPropertyChanged();
+                PersistSettings();
+            }
+        }
+    }
+
+    public bool IncludeRemovableDrives
+    {
+        get => _settings.Scan.IncludeRemovableDrives;
+        set
+        {
+            if (_settings.Scan.IncludeRemovableDrives != value)
+            {
+                _settings.Scan.IncludeRemovableDrives = value;
+                OnPropertyChanged();
+                PersistSettings();
+            }
+        }
+    }
+
+    public bool RecordPermissionGaps
+    {
+        get => _settings.Scan.RecordPermissionGaps;
+        set
+        {
+            if (_settings.Scan.RecordPermissionGaps != value)
+            {
+                _settings.Scan.RecordPermissionGaps = value;
+                OnPropertyChanged();
+                PersistSettings();
+            }
+        }
+    }
+
+    public bool DoNotFollowDirectoryLinks
+    {
+        get => _settings.Scan.DoNotFollowDirectoryLinks;
+        set
+        {
+            if (_settings.Scan.DoNotFollowDirectoryLinks != value)
+            {
+                _settings.Scan.DoNotFollowDirectoryLinks = value;
+                OnPropertyChanged();
+                PersistSettings();
+            }
+        }
+    }
+
+    public bool RedactUserProfileInReports
+    {
+        get => _settings.Privacy.RedactUserProfileInReports;
+        set
+        {
+            if (_settings.Privacy.RedactUserProfileInReports != value)
+            {
+                _settings.Privacy.RedactUserProfileInReports = value;
+                OnPropertyChanged();
+                PersistSettings();
+            }
+        }
+    }
+
+    public bool RetainScanHistory
+    {
+        get => _settings.Data.RetainScanHistory;
+        set
+        {
+            if (_settings.Data.RetainScanHistory != value)
+            {
+                _settings.Data.RetainScanHistory = value;
+                OnPropertyChanged();
+                PersistSettings();
+            }
+        }
+    }
+
+    public int MaxSnapshotsToKeep
+    {
+        get => _settings.Data.MaxSnapshotsToKeep;
+        set
+        {
+            var normalized = Math.Clamp(value, 1, 100);
+            if (_settings.Data.MaxSnapshotsToKeep != normalized)
+            {
+                _settings.Data.MaxSnapshotsToKeep = normalized;
+                OnPropertyChanged();
+                PersistSettings();
+            }
+        }
+    }
+
+    public int MaxBestInsightCards
+    {
+        get => _settings.Charts.MaxBestInsightCards;
+        set
+        {
+            var normalized = Math.Clamp(value, 6, 28);
+            if (_settings.Charts.MaxBestInsightCards != normalized)
+            {
+                _settings.Charts.MaxBestInsightCards = normalized;
+                OnPropertyChanged();
+                PersistSettings();
+                if (_currentScan is not null)
+                {
+                    RefreshVisualLab(_currentScan, _findingsByNode.Values.ToList(), _currentRelationships, Changes.Select(c => c.Model).ToList());
+                }
+            }
+        }
+    }
+
+    public string ChartDensity
+    {
+        get => _settings.Charts.Density;
+        set
+        {
+            if (!string.Equals(_settings.Charts.Density, value, StringComparison.Ordinal))
+            {
+                _settings.Charts.Density = value;
+                OnPropertyChanged();
+                PersistSettings();
+            }
+        }
+    }
 
     public int SelectedWorkspaceIndex
     {
@@ -575,6 +838,12 @@ public sealed class MainViewModel : ObservableObject
             .Any(arg => string.Equals(arg, "--demo", StringComparison.OrdinalIgnoreCase));
     }
 
+    private static bool IsFirstRunPreviewMode()
+    {
+        return Environment.GetCommandLineArgs()
+            .Any(arg => string.Equals(arg, "--first-run", StringComparison.OrdinalIgnoreCase));
+    }
+
     private static int InitialWorkspaceIndex()
     {
         foreach (var arg in Environment.GetCommandLineArgs())
@@ -587,12 +856,13 @@ public sealed class MainViewModel : ObservableObject
             return arg["--view=".Length..].Trim().ToLowerInvariant() switch
             {
                 "overview" => OverviewWorkspaceIndex,
-                "visualize" or "visualizer" => VisualizeWorkspaceIndex,
-                "visual-lab" or "lab" => VisualLabWorkspaceIndex,
+                "files" or "explore" => FilesWorkspaceIndex,
+                "visualize" or "visualizer" or "map" => VisualizeWorkspaceIndex,
+                "visual-lab" or "lab" or "charts" => VisualLabWorkspaceIndex,
                 "cleanup" => CleanupWorkspaceIndex,
-                "changes" => ChangesWorkspaceIndex,
-                "insights" => InsightsWorkspaceIndex,
-                "tutorials" or "guide" => TutorialsWorkspaceIndex,
+                "changes" or "what-changed" => ChangesWorkspaceIndex,
+                "insights" or "explanations" => InsightsWorkspaceIndex,
+                "tutorials" or "guide" or "help" => TutorialsWorkspaceIndex,
                 "settings" or "privacy" or "safety" => SettingsWorkspaceIndex,
                 _ => OverviewWorkspaceIndex
             };
@@ -618,9 +888,43 @@ public sealed class MainViewModel : ObservableObject
         return Path.Combine(DefaultAppDataDirectory(), "first-run-state.json");
     }
 
+    private static string DefaultAppSettingsPath()
+    {
+        return Path.Combine(DefaultAppDataDirectory(), "app-settings.json");
+    }
+
     private static string DefaultReportsDirectory()
     {
         return Path.Combine(DefaultAppDataDirectory(), "Reports");
+    }
+
+    private AppSettings LoadSettings()
+    {
+        try
+        {
+            return _appSettingsStore.LoadAsync().GetAwaiter().GetResult();
+        }
+        catch
+        {
+            return new AppSettings();
+        }
+    }
+
+    private void PersistSettings()
+    {
+        _ = PersistSettingsAsync();
+    }
+
+    private async Task PersistSettingsAsync()
+    {
+        try
+        {
+            await _appSettingsStore.SaveAsync(_settings).ConfigureAwait(false);
+        }
+        catch
+        {
+            // Settings persistence should never block scanning or review workflows.
+        }
     }
 
     private static string RedactLocalDisplayPath(string path)
@@ -659,6 +963,14 @@ public sealed class MainViewModel : ObservableObject
             "Cleanup execution",
             "Advisory only",
             "This version stages recommendations for review and does not directly delete files."));
+        PrivacyFacts.Add(new PrivacyFactViewModel(
+            "Ownership",
+            "Andrew Rainsberger",
+            "Disk Space Inspector is source-available software owned by Andrew Rainsberger."));
+        PrivacyFacts.Add(new PrivacyFactViewModel(
+            "Use at your own risk",
+            "Review before acting",
+            "The app explains disk usage and cleanup candidates, but you are responsible for backups and any action taken outside the app."));
     }
 
     private async Task MarkAppOpenedAsync()
@@ -720,7 +1032,8 @@ public sealed class MainViewModel : ObservableObject
     {
         var volumes = Volumes
             .Where(v => v.Model.IsReady)
-            .Where(v => v.Model.DriveType is "Fixed" or "Removable")
+            .Where(v => (v.Model.DriveType == "Fixed" && _settings.Scan.IncludeFixedDrives) ||
+                        (v.Model.DriveType == "Removable" && _settings.Scan.IncludeRemovableDrives))
             .Select(v => v.Model)
             .ToList();
 
@@ -863,7 +1176,7 @@ public sealed class MainViewModel : ObservableObject
         if (result is null)
         {
             StatusText = "No saved scans found.";
-            IsFirstRunWelcomeVisible = true;
+            IsFirstRunWelcomeVisible = _settings.Launch.ShowWelcomeWhenNoScan;
             return;
         }
 
@@ -905,8 +1218,16 @@ public sealed class MainViewModel : ObservableObject
             CleanupFindings.Add(new CleanupFindingViewModel(finding));
         }
 
+        _cleanupReviewQueue = new CleanupReviewQueue();
+        RefreshCleanupReviewQueue();
+
         Changes.Clear();
-        foreach (var change in changeList.OrderByDescending(c => Math.Abs(c.DeltaBytes)).Take(2000))
+        var changeSummary = ChangeSummaryService.Summarize(changeList, result.Nodes.Count);
+        WhatChangedSummary = changeSummary.Message;
+        IReadOnlyList<ChangeRecord> displayChanges = changeSummary.IsBaseline
+            ? []
+            : changeList.OrderByDescending(c => Math.Abs(c.DeltaBytes)).Take(2000).ToList();
+        foreach (var change in displayChanges)
         {
             Changes.Add(new ChangeRecordViewModel(change));
         }
@@ -929,6 +1250,7 @@ public sealed class MainViewModel : ObservableObject
         }
 
         RefreshOverviewCollections();
+        RefreshConsumerTools(result, findingList, relationshipList, changeList);
         RefreshFiveMinuteFindings(result, findingList, relationshipList, changeList);
         RefreshVisualLab(result, findingList, relationshipList, changeList);
 
@@ -1188,6 +1510,101 @@ public sealed class MainViewModel : ObservableObject
         }
     }
 
+    private void RefreshConsumerTools(
+        ScanResult result,
+        IReadOnlyList<CleanupFinding> findings,
+        IReadOnlyList<StorageRelationship> relationships,
+        IReadOnlyList<ChangeRecord> changes)
+    {
+        ConsumerTools.Clear();
+
+        var topFolder = result.Nodes
+            .Where(n => n.ParentId is not null && n.Kind != FileSystemNodeKind.File)
+            .OrderByDescending(SizeOf)
+            .FirstOrDefault();
+        if (topFolder is not null)
+        {
+            ConsumerTools.Add(new ConsumerStorageToolViewModel(
+                "Find biggest folders",
+                ByteFormatter.Format(SizeOf(topFolder)),
+                $"{topFolder.Name} is the largest folder in the loaded scan.",
+                "Show in Files",
+                topFolder.Name,
+                FilesWorkspaceIndex));
+        }
+
+        var safeBytes = findings.Where(f => f.Safety == CleanupSafety.Safe).Sum(f => f.SizeBytes);
+        ConsumerTools.Add(new ConsumerStorageToolViewModel(
+            "Review safest cleanup",
+            ByteFormatter.Format(safeBytes),
+            "Only low-risk cache and temporary findings are counted here.",
+            "Open Cleanup",
+            "cache",
+            CleanupWorkspaceIndex));
+
+        var oldDownloads = findings
+            .Where(f => f.Category.Contains("Downloads", StringComparison.OrdinalIgnoreCase) ||
+                        f.Path.Contains(@"\Downloads", StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(f => f.SizeBytes)
+            .FirstOrDefault();
+        ConsumerTools.Add(new ConsumerStorageToolViewModel(
+            "Check downloads",
+            oldDownloads is null ? "None flagged" : ByteFormatter.Format(oldDownloads.SizeBytes),
+            oldDownloads is null ? "No large old downloads in this scan." : $"{oldDownloads.DisplayName} needs a human decision.",
+            "Search downloads",
+            "Downloads",
+            FilesWorkspaceIndex));
+
+        var developerBytes = findings
+            .Where(f => f.Category.Contains("Developer", StringComparison.OrdinalIgnoreCase) ||
+                        f.Path.Contains("node_modules", StringComparison.OrdinalIgnoreCase) ||
+                        f.Path.Contains(@"\.venv", StringComparison.OrdinalIgnoreCase))
+            .Sum(f => f.SizeBytes);
+        ConsumerTools.Add(new ConsumerStorageToolViewModel(
+            "Developer bloat",
+            ByteFormatter.Format(developerBytes),
+            "Generated dependencies and caches can be high-yield but may need rebuild time.",
+            "Filter dev paths",
+            "node_modules",
+            FilesWorkspaceIndex));
+
+        var systemBytes = findings
+            .Where(f => f.Safety == CleanupSafety.UseSystemCleanup)
+            .Sum(f => f.SizeBytes);
+        ConsumerTools.Add(new ConsumerStorageToolViewModel(
+            "System cleanup routes",
+            ByteFormatter.Format(systemBytes),
+            "These items should use Windows or app cleanup tools, not direct deletion.",
+            "Open Cleanup",
+            "Windows",
+            CleanupWorkspaceIndex));
+
+        var growth = changes
+            .Where(c => c.DeltaBytes > 0)
+            .OrderByDescending(c => c.DeltaBytes)
+            .FirstOrDefault();
+        ConsumerTools.Add(new ConsumerStorageToolViewModel(
+            "What grew recently",
+            growth is null ? "No growth" : ByteFormatter.Format(growth.DeltaBytes),
+            growth is null ? "Run another scan later to compare." : Path.GetFileName(growth.Path.TrimEnd('\\')),
+            "Open What Changed",
+            "",
+            ChangesWorkspaceIndex));
+
+        var owner = relationships
+            .Where(r => !string.IsNullOrWhiteSpace(r.Owner))
+            .GroupBy(r => r.Owner)
+            .OrderByDescending(g => g.Count())
+            .FirstOrDefault();
+        ConsumerTools.Add(new ConsumerStorageToolViewModel(
+            "App-owned storage",
+            owner?.Key ?? "Unknown",
+            owner is null ? "No app ownership evidence yet." : $"{owner.Count():n0} evidence links found.",
+            "Open Explanations",
+            owner?.Key ?? "",
+            InsightsWorkspaceIndex));
+    }
+
     private void RefreshFiveMinuteFindings(
         ScanResult result,
         IReadOnlyList<CleanupFinding> findings,
@@ -1260,6 +1677,18 @@ public sealed class MainViewModel : ObservableObject
         StatusText = "Open the cleanup safety guide before staging recommendations.";
     }
 
+    private void RunConsumerTool(object? parameter)
+    {
+        if (parameter is not ConsumerStorageToolViewModel tool)
+        {
+            return;
+        }
+
+        SearchText = tool.SearchQuery;
+        SelectedWorkspaceIndex = tool.WorkspaceIndex;
+        StatusText = $"{tool.Title}: {tool.Detail}";
+    }
+
     private async Task ExportDiagnosticsAsync()
     {
         if (_currentScan is null)
@@ -1280,7 +1709,11 @@ public sealed class MainViewModel : ObservableObject
                 new ReportExportOptions
                 {
                     OutputDirectory = outputDirectory,
-                    PathPrivacyMode = PathPrivacyMode.RedactedUserProfile
+                    PathPrivacyMode = _settings.Privacy.RedactUserProfileInReports
+                        ? PathPrivacyMode.RedactedUserProfile
+                        : PathPrivacyMode.Raw,
+                    IncludeRelationships = _settings.Privacy.IncludeRelationshipsInReports,
+                    IncludeInsights = _settings.Privacy.IncludeInsightsInReports
                 }).ConfigureAwait(true);
 
             ReportExportStatus = $"Exported {bundle.FileCount:n0} files to {RedactLocalDisplayPath(bundle.DirectoryPath)}. Redacted {bundle.RedactedPathCount:n0} path segments.";
@@ -1310,12 +1743,12 @@ public sealed class MainViewModel : ObservableObject
             changes,
             Volumes.Select(v => v.Model).ToList());
 
-        foreach (var chart in snapshot.Charts.Where(c => !c.IsAdvanced).Take(16))
+        foreach (var chart in snapshot.Charts.Where(c => !c.IsAdvanced).Take(_settings.Charts.MaxBestInsightCards))
         {
             VisualLabCharts.Add(new ChartDefinitionViewModel(chart));
         }
 
-        foreach (var chart in snapshot.Charts.Where(c => c.IsAdvanced).Take(32))
+        foreach (var chart in snapshot.Charts.Where(c => c.IsAdvanced).Take(_settings.Charts.MaxAdvancedCards))
         {
             VisualLabAdvancedCharts.Add(new ChartDefinitionViewModel(chart));
         }
@@ -1335,20 +1768,20 @@ public sealed class MainViewModel : ObservableObject
         {
             case ChartPoint { NodeId: { } nodeId }:
                 NavigateToNode(nodeId);
-                StatusText = "Visual Lab selection synced to the inspector.";
+                StatusText = "Chart selection synced to the inspector.";
                 break;
             case RelationshipFlow { NodeId: { } nodeId }:
                 NavigateToNode(nodeId);
                 StatusText = "Relationship flow synced to the inspector.";
                 break;
             case ChartPoint point when !string.IsNullOrWhiteSpace(point.Path):
-                StatusText = $"Visual Lab selected {point.Path}.";
+                StatusText = $"Chart selected {point.Path}.";
                 break;
             case HeatmapCell cell:
-                StatusText = $"Visual Lab selected {cell.Label}: {cell.Detail}.";
+                StatusText = $"Chart selected {cell.Label}: {cell.Detail}.";
                 break;
             case RelationshipFlow flow:
-                StatusText = $"Visual Lab selected {flow.Source} -> {flow.Target}.";
+                StatusText = $"Chart selected {flow.Source} -> {flow.Target}.";
                 break;
         }
     }
@@ -1431,11 +1864,161 @@ public sealed class MainViewModel : ObservableObject
             return;
         }
 
-        var plan = _cleanupPlanBuilder.Build([SelectedFinding.Model]);
+        var result = _cleanupReviewQueueService.TryStage(_cleanupReviewQueue, SelectedFinding.Model);
+        _cleanupReviewQueue = result.Queue;
+        RefreshCleanupReviewQueue();
+
+        var plan = _cleanupPlanBuilder.Build(_cleanupReviewQueue.Items.Select(ToFinding));
         PlannedCleanupSize = ByteFormatter.Format(plan.EstimatedReclaimableBytes);
-        StatusText = plan.Findings.Count == 0
-            ? "This item is not eligible for direct cleanup. Use the recommended app or system route."
-            : $"Staged {SelectedFinding.DisplayName} for review. No files are deleted from this version.";
+        StatusText = result.Message;
+    }
+
+    private void RemoveSelectedCleanupReviewItem()
+    {
+        if (SelectedCleanupReviewItem is null)
+        {
+            return;
+        }
+
+        _cleanupReviewQueue = _cleanupReviewQueueService.Remove(_cleanupReviewQueue, SelectedCleanupReviewItem.Model.FindingId);
+        SelectedCleanupReviewItem = null;
+        RefreshCleanupReviewQueue();
+        StatusText = "Removed the item from the cleanup review queue.";
+    }
+
+    private void ClearCleanupReviewQueue()
+    {
+        _cleanupReviewQueue = _cleanupReviewQueueService.Clear(_cleanupReviewQueue);
+        SelectedCleanupReviewItem = null;
+        RefreshCleanupReviewQueue();
+        StatusText = "Cleanup review queue cleared.";
+    }
+
+    private async Task ExportCleanupReviewAsync()
+    {
+        if (_cleanupReviewQueue.Items.Count == 0)
+        {
+            StatusText = "Stage at least one cleanup item before exporting a review checklist.";
+            return;
+        }
+
+        try
+        {
+            var outputDirectory = Path.Combine(_reportsDirectory, "cleanup-review-" + DateTimeOffset.Now.ToString("yyyyMMdd-HHmmss"));
+            var export = await _cleanupReviewQueueService.ExportAsync(
+                _cleanupReviewQueue,
+                outputDirectory,
+                _settings.Privacy.RedactUserProfileInReports ? PathPrivacyMode.RedactedUserProfile : PathPrivacyMode.Raw)
+                .ConfigureAwait(true);
+            StatusText = $"Cleanup review exported locally. Redacted {export.RedactedPathCount:n0} path segments.";
+            Process.Start(new ProcessStartInfo("explorer.exe", $"\"{export.DirectoryPath}\"") { UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"Cleanup review export failed: {ex.Message}";
+        }
+    }
+
+    private void RefreshCleanupReviewQueue()
+    {
+        CleanupReviewItems.Clear();
+        foreach (var item in _cleanupReviewQueue.Items
+                     .OrderBy(item => item.Safety)
+                     .ThenByDescending(item => item.SizeBytes))
+        {
+            CleanupReviewItems.Add(new CleanupReviewItemViewModel(item));
+        }
+
+        PlannedCleanupSize = ByteFormatter.Format(_cleanupReviewQueue.TotalBytes);
+        CleanupReviewSummary = CleanupReviewItems.Count == 0
+            ? "Nothing is staged. Select a Safe or Review finding and add it to this queue before taking action outside the app."
+            : $"{CleanupReviewItems.Count:n0} item(s), {_cleanupReviewQueue.TotalFileCount:n0} file(s), {ByteFormatter.Format(_cleanupReviewQueue.TotalBytes)} staged for manual review.";
+        ClearCleanupQueueCommand.RaiseCanExecuteChanged();
+        ExportCleanupReviewCommand.RaiseCanExecuteChanged();
+    }
+
+    private static CleanupFinding ToFinding(CleanupReviewItem item)
+    {
+        return new CleanupFinding
+        {
+            Id = item.FindingId,
+            NodeId = item.NodeId,
+            Path = item.Path,
+            DisplayName = item.DisplayName,
+            Category = item.Category,
+            Safety = item.Safety,
+            RecommendedAction = item.RecommendedAction,
+            SizeBytes = item.SizeBytes,
+            FileCount = item.FileCount,
+            Confidence = item.Confidence,
+            Explanation = item.Explanation
+        };
+    }
+
+    private void OpenShellTarget(string target)
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo(target) { UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"Could not open {target}: {ex.Message}";
+        }
+    }
+
+    private void ResetWelcomeState()
+    {
+        IsFirstRunWelcomeVisible = true;
+        StatusText = "First-run welcome is visible again.";
+    }
+
+    private void ClearLocalDatabase()
+    {
+        if (IsScanning)
+        {
+            StatusText = "Stop the active scan before clearing local scan data.";
+            return;
+        }
+
+        var choice = MessageBox.Show(
+            "Clear the local scan database? This removes saved Disk Space Inspector snapshots on this PC only. It does not touch scanned files.",
+            "Clear local scan data",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning);
+        if (choice != MessageBoxResult.Yes)
+        {
+            return;
+        }
+
+        try
+        {
+            if (File.Exists(_databasePath))
+            {
+                File.Delete(_databasePath);
+            }
+
+            _currentScan = null;
+            _nodes.Clear();
+            _childrenByParent.Clear();
+            _findingsByNode.Clear();
+            CleanupFindings.Clear();
+            CleanupReviewItems.Clear();
+            TopSpaceConsumers.Clear();
+            NodeRows.Clear();
+            TreeNodes.Clear();
+            TreemapTiles.Clear();
+            SunburstSegments.Clear();
+            Changes.Clear();
+            Insights.Clear();
+            ConsumerTools.Clear();
+            StatusText = "Local scan database cleared. Run a new scan or open demo mode.";
+            IsFirstRunWelcomeVisible = _settings.Launch.ShowWelcomeWhenNoScan;
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"Could not clear local scan database: {ex.Message}";
+        }
     }
 
     private static ScanResult MergeResults(IReadOnlyList<ScanResult> results)

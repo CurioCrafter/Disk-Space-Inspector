@@ -1,6 +1,6 @@
-﻿Disk Space Inspector Source-Available Use License 1.0
+Disk Space Inspector Source-Available Use License 1.1
 
-Copyright (c) 2026 Andre. All rights reserved.
+Copyright (c) 2026 Andrew Rainsberger. All rights reserved.
 
 This license applies to the Disk Space Inspector software, source code, documentation,
 designs, assets, and related files in this repository, except for third-party
@@ -8,22 +8,23 @@ components that state their own separate licenses.
 
 1. Ownership
 
-Disk Space Inspector is owned by Andre. This license does not sell, assign, transfer, or
-waive ownership of Disk Space Inspector or any Disk Space Inspector intellectual property. No person
-or organization receives ownership of Disk Space Inspector by downloading, viewing,
-copying, running, modifying, or contributing to it.
+Disk Space Inspector is owned by Andrew Rainsberger. This license does not sell,
+assign, transfer, or waive ownership of Disk Space Inspector or any Disk Space
+Inspector intellectual property. No person or organization receives ownership of
+Disk Space Inspector by downloading, viewing, copying, running, modifying, or
+contributing to it.
 
 2. Permission To Use
 
-You may download, install, run, inspect, and use Disk Space Inspector for personal use,
-internal business use, testing, evaluation, and learning. You may make local
+You may download, install, run, inspect, and use Disk Space Inspector for personal
+use, internal business use, testing, evaluation, and learning. You may make local
 copies and local modifications for your own use under this license.
 
 3. Attribution And Notices
 
 You must keep this license, copyright notices, ownership notices, and attribution
-with all copies of Disk Space Inspector. You may not remove, hide, or change notices that
-identify Andre as the owner of Disk Space Inspector.
+with all copies of Disk Space Inspector. You may not remove, hide, or change
+notices that identify Andrew Rainsberger as the owner of Disk Space Inspector.
 
 4. Restrictions
 
@@ -31,52 +32,64 @@ You may not:
 
 - Claim that you own Disk Space Inspector or any part of Disk Space Inspector.
 - Sell, rent, lease, sublicense, relicense, or commercially distribute
-  Disk Space Inspector without Andre's prior written permission.
-- Publish, distribute, or make available modified versions of Disk Space Inspector without
-  Andre's prior written permission.
-- Use the Disk Space Inspector name, logo, branding, or confusingly similar names to imply
-  endorsement or ownership without Andre's prior written permission.
+  Disk Space Inspector without Andrew Rainsberger's prior written permission.
+- Publish, distribute, or make available modified versions of Disk Space Inspector
+  without Andrew Rainsberger's prior written permission.
+- Use the Disk Space Inspector name, logo, branding, or confusingly similar names
+  to imply endorsement or ownership without Andrew Rainsberger's prior written
+  permission.
 - Remove safety guardrails, cleanup warnings, licensing notices, or ownership
   notices for redistribution.
-- Use Disk Space Inspector to violate law, privacy rights, security boundaries, or the
-  rights of others.
+- Use Disk Space Inspector to violate law, privacy rights, security boundaries,
+  or the rights of others.
 
 5. Contributions
 
 If you submit code, design, documentation, ideas, fixes, or other contributions
 to Disk Space Inspector, you keep any copyright you already own in your original
-contribution. By submitting a contribution, you grant Andre a perpetual,
-worldwide, royalty-free, irrevocable license to use, copy, modify, distribute,
-sell, sublicense, and relicense that contribution as part of Disk Space Inspector or
-related products. You confirm that you have the right to grant that permission.
+contribution. By submitting a contribution, you grant Andrew Rainsberger a
+perpetual, worldwide, royalty-free, irrevocable license to use, copy, modify,
+distribute, sell, sublicense, and relicense that contribution as part of Disk
+Space Inspector or related products. You confirm that you have the right to grant
+that permission.
 
 6. Third-Party Components
 
-Disk Space Inspector may depend on third-party libraries, tools, SDKs, or assets. Those
-third-party components are licensed by their respective owners under their own
-terms. This license does not change the terms for third-party components.
+Disk Space Inspector may depend on third-party libraries, tools, SDKs, or assets.
+Those third-party components are licensed by their respective owners under their
+own terms. This license does not change the terms for third-party components.
 
 7. No Warranty
 
-Disk Space Inspector is provided "as is" and "as available", without warranties of any
-kind, express or implied, including warranties of merchantability, fitness for a
-particular purpose, title, and non-infringement.
+Disk Space Inspector is provided "as is" and "as available", without warranties
+of any kind, express or implied, including warranties of merchantability, fitness
+for a particular purpose, title, and non-infringement.
 
-8. Limitation Of Liability
+8. Use At Your Own Risk
 
-To the maximum extent permitted by law, Andre is not liable for any indirect,
-incidental, special, consequential, exemplary, or punitive damages, or for lost
-profits, lost data, lost files, business interruption, security incidents,
-cleanup mistakes, or other losses arising from Disk Space Inspector or this license.
+Disk Space Inspector scans local storage and may surface cleanup recommendations,
+large-file findings, relationship evidence, and diagnostics. You are responsible
+for reviewing paths, understanding consequences, and backing up important files
+before you take any cleanup action inside or outside the software. Running,
+relying on, or acting on Disk Space Inspector output is at your own risk.
 
-9. Termination
+9. Limitation Of Liability
+
+To the maximum extent permitted by law, Andrew Rainsberger is not liable for any
+indirect, incidental, special, consequential, exemplary, or punitive damages, or
+for lost profits, lost data, lost files, business interruption, security
+incidents, cleanup mistakes, or other losses arising from Disk Space Inspector or
+this license.
+
+10. Termination
 
 If you violate this license, your permissions under this license end
-automatically. Sections about ownership, attribution, restrictions,
-third-party components, warranty, liability, and termination continue to apply.
+automatically. Sections about ownership, attribution, restrictions, third-party
+components, warranty, use-at-your-own-risk, liability, and termination continue
+to apply.
 
-10. Separate Written Permission
+11. Separate Written Permission
 
-Andre may grant different or additional permissions in a separate written
-agreement. A separate written agreement controls only for the people or
+Andrew Rainsberger may grant different or additional permissions in a separate
+written agreement. A separate written agreement controls only for the people or
 organizations covered by that agreement.

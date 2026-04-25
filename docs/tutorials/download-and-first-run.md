@@ -4,6 +4,7 @@
 2. Download the installer or portable ZIP.
 3. Launch Disk Space Inspector.
 4. Choose `Open demo workspace` to tour the app without scanning real drives, or choose `Scan this PC` for local results.
-5. Review the `5-minute findings` panel before opening Visual Lab or Cleanup.
+5. Review the `5-minute findings` panel before opening Charts or Cleanup.
+6. Use Settings to confirm privacy, startup, scan, report, and local data options.
 
 The app does not send telemetry or use external advisor services. Cleanup remains advisory and staged in this release.

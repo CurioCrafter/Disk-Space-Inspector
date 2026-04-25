@@ -1,9 +1,9 @@
 #define MyAppName "Disk Space Inspector"
 #ifndef MyAppVersion
-#define MyAppVersion "1.0.0"
+#define MyAppVersion "1.1.0"
 #endif
 #ifndef SourceDir
-#define SourceDir "..\artifacts\publish\DiskSpaceInspector-1.0.0-win-x64"
+#define SourceDir "..\artifacts\publish\DiskSpaceInspector-1.1.0-win-x64"
 #endif
 #ifndef OutputDir
 #define OutputDir "..\artifacts\release"
@@ -13,7 +13,7 @@
 AppId={{B1D65256-8308-4C61-9F3D-78460E63C3B3}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
-AppPublisher=Andre
+AppPublisher=Andrew Rainsberger
 AppPublisherURL=https://github.com/CurioCrafter/Disk-Space-Inspector
 AppSupportURL=https://github.com/CurioCrafter/Disk-Space-Inspector/issues
 AppUpdatesURL=https://github.com/CurioCrafter/Disk-Space-Inspector/releases
